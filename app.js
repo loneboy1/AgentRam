@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3000/api/agents';
+const API_URL = 'http://localhost:3000/api';
 const statusFilters = ['All', 'Active', 'Pending', 'Alert'];
 let agents = [];
 let selectedStatus = 'All';
@@ -19,29 +19,86 @@ function validAgent(agent) {
     Number.isInteger(Number(agent.trust)) && Number(agent.trust) >= 0 && Number(agent.trust) <= 100;
 }
 
-async function apiRequest(method, payload, id = null) {
-  const options = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-  };
-
-  if (payload !== undefined) options.body = JSON.stringify(payload);
-
-  const url = id ? `${API_URL}?id=${encodeURIComponent(id)}` : API_URL;
-  const response = await fetch(url, options);
-  const contentType = response.headers.get('content-type') || '';
-  const result = contentType.includes('application/json') ? await response.json() : await response.text();
-
-  if (!response.ok) {
-    throw new Error(typeof result === 'object' && result && result.message ? result.message : 'Request failed');
+function parseNaturalQuery(query = '') {
+  const text = String(query || '').trim().toLowerCase();
+  if (!text) {
+    return { status: null, risk: null, minTrust: null, wallet: null, keywords: [] };
   }
 
-  return result;
+  const tokens = text.split(/\s+/).filter(Boolean);
+  const status = ['active', 'pending', 'alert'].find((value) => tokens.includes(value)) || null;
+  const risk = ['low', 'medium', 'high'].find((value) => tokens.includes(value)) || null;
+  const wallet = tokens.find((token) => token.startsWith('0x')) || null;
+  const minTrustTerm = tokens.find((token) => /^\d+%?$/.test(token));
+  const minTrust = minTrustTerm ? Number(minTrustTerm.replace('%', '')) : null;
+
+  return {
+    status,
+    risk,
+    wallet,
+    minTrust,
+    keywords: tokens.filter((token) => !['active', 'pending', 'alert', 'low', 'medium', 'high', 'trust', 'wallet', 'bnb', 'agent', 'find', 'search', 'show', 'list'].includes(token))
+  };
+}
+
+function smartFilterAgents(list, query = '') {
+  const filters = parseNaturalQuery(query);
+  const cleaned = String(query || '').trim();
+
+  if (!cleaned) {
+    return list;
+  }
+
+  return list.filter((agent) => {
+    const haystack = [agent.id, agent.name, agent.wallet, agent.status, agent.risk, agent.notes].join(' ').toLowerCase();
+    const keywordMatch = !filters.keywords.length || filters.keywords.some((keyword) => haystack.includes(keyword));
+    const statusMatch = !filters.status || agent.status.toLowerCase() === filters.status;
+    const riskMatch = !filters.risk || agent.risk.toLowerCase() === filters.risk;
+    const walletMatch = !filters.wallet || agent.wallet.toLowerCase().includes(filters.wallet);
+    const trustMatch = filters.minTrust === null || Number(agent.trust) >= Number(filters.minTrust);
+    const textMatch = !cleaned || haystack.includes(cleaned) || agent.id.toLowerCase().includes(cleaned) || agent.name.toLowerCase().includes(cleaned);
+    return keywordMatch && statusMatch && riskMatch && walletMatch && trustMatch && textMatch;
+  });
+}
+
+function getAuthHeaders() {
+  const token = localStorage.getItem('agentram_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+}
+
+async function apiRequest(path, method = 'GET', payload) {
+  const response = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: getAuthHeaders(),
+    ...(payload !== undefined ? { body: JSON.stringify(payload) } : {})
+  });
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!response.ok) {
+    throw new Error(data?.message || 'Request failed');
+  }
+
+  return data;
+}
+
+async function loadMe() {
+  try {
+    const data = await apiRequest('/me');
+    return data;
+  } catch (error) {
+    logout();
+    return null;
+  }
 }
 
 async function loadAgents() {
   try {
-    const data = await apiRequest('GET');
+    const data = await apiRequest('/agents');
     if (Array.isArray(data) && data.every(validAgent)) {
       return data;
     }
@@ -49,24 +106,21 @@ async function loadAgents() {
     console.warn('API load failed:', error.message);
   }
 
-  try {
-    const fallback = JSON.parse(localStorage.getItem('agentram_local_fallback') || '[]');
-    if (Array.isArray(fallback) && fallback.every(validAgent)) {
-      return fallback;
-    }
-  } catch (error) {
-    // ignore fallback parse issue
-  }
-
   return [];
 }
 
-function saveAgentsLocally() {
-  try {
-    localStorage.setItem('agentram_local_fallback', JSON.stringify(agents));
-  } catch (error) {
-    // ignore local storage errors
-  }
+function logout() {
+  localStorage.removeItem('agentram_token');
+  window.location.reload();
+}
+
+function showToast(message) {
+  const toast = $('#toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), 3000);
 }
 
 function statusBadgeClass(status) {
@@ -144,12 +198,11 @@ function renderFilters() {
 }
 
 function renderTable() {
-  const searchValue = $('#searchInput').value.trim().toLowerCase();
-  const filteredAgents = agents.filter((agent) => {
-    const matchesStatus = selectedStatus === 'All' || agent.status === selectedStatus;
-    const searchable = [agent.id, agent.name, agent.wallet, agent.notes, agent.status, agent.risk].join(' ').toLowerCase();
-    return matchesStatus && (!searchValue || searchable.includes(searchValue));
-  });
+  const searchValue = $('#searchInput').value.trim();
+  const filteredAgents = smartFilterAgents(
+    agents.filter((agent) => selectedStatus === 'All' || agent.status === selectedStatus),
+    searchValue
+  );
 
   $('#resultCount').textContent = `${filteredAgents.length} hasil`;
   const body = $('#agentTableBody');
@@ -205,8 +258,7 @@ function openDialog(agent) {
 }
 
 function openDetailModal(agent) {
-  const detailContent = $('#detailContent');
-  detailContent.innerHTML = `
+  $('#detailContent').innerHTML = `
     <div class="detail-grid">
       <div class="detail-item">
         <span>Agent ID</span>
@@ -245,26 +297,6 @@ function openDetailModal(agent) {
   $('#agentDetailDialog').showModal();
 }
 
-function showToast(message) {
-  const toast = $('#toast');
-  if (!toast) return;
-  toast.textContent = message;
-  toast.classList.add('visible');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('visible'), 3000);
-}
-
-function exportJSON() {
-  const blob = new Blob([`${JSON.stringify(agents, null, 2)}\n`], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'agents.json';
-  link.click();
-  URL.revokeObjectURL(url);
-  showToast('Data agent diekspor sebagai JSON.');
-}
-
 async function handleSubmit(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
@@ -292,15 +324,14 @@ async function handleSubmit(event) {
 
   try {
     if (originalId) {
-      await apiRequest('PUT', agent);
+      await apiRequest('/agents', 'PUT', agent);
       showToast('Data agent berhasil diperbarui.');
     } else {
-      await apiRequest('POST', agent);
+      await apiRequest('/agents', 'POST', agent);
       showToast('Agent berhasil ditambahkan.');
     }
 
     agents = await loadAgents();
-    saveAgentsLocally();
     refreshDashboard();
     $('#agentDialog').close();
   } catch (error) {
@@ -320,9 +351,8 @@ async function handleTableAction(event) {
     openDialog(agent);
   } else if (button.dataset.action === 'delete' && confirm(`Hapus agent ${agent.id}?`)) {
     try {
-      await apiRequest('DELETE', undefined, agent.id);
+      await apiRequest(`/agents?id=${encodeURIComponent(agent.id)}`, 'DELETE');
       agents = await loadAgents();
-      saveAgentsLocally();
       refreshDashboard();
       showToast('Agent berhasil dihapus.');
     } catch (error) {
@@ -331,14 +361,83 @@ async function handleTableAction(event) {
   }
 }
 
-async function init() {
-  agents = await loadAgents();
-  saveAgentsLocally();
-  refreshDashboard();
+async function handleLogin(event) {
+  event.preventDefault();
+  const username = $('#loginUsername').value.trim();
+  const password = $('#loginPassword').value;
+  const submitButton = $('#loginSubmit');
 
+  submitButton.disabled = true;
+  submitButton.textContent = 'Masuk...';
+
+  try {
+    const data = await fetch(`${API_URL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    }).then(async (response) => {
+      const text = await response.text();
+      const json = text ? JSON.parse(text) : null;
+      if (!response.ok) throw new Error(json?.message || 'Login gagal');
+      return json;
+    });
+
+    localStorage.setItem('agentram_token', data.token);
+    $('#loginForm').reset();
+    initDashboard();
+  } catch (error) {
+    $('#loginError').textContent = error.message || 'Login gagal';
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = 'Masuk';
+  }
+}
+
+function renderLogin() {
+  $('#app').classList.add('hidden');
+  $('#loginScreen').classList.remove('hidden');
+}
+
+function renderDashboard() {
+  $('#loginScreen').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+}
+
+async function initDashboard() {
+  const user = await loadMe();
+  if (!user) {
+    renderLogin();
+    return;
+  }
+
+  renderDashboard();
+  $('#usernameLabel').textContent = user.username;
+  agents = await loadAgents();
+  refreshDashboard();
+}
+
+async function init() {
+  const token = localStorage.getItem('agentram_token');
+  if (!token) {
+    renderLogin();
+  } else {
+    await initDashboard();
+  }
+
+  $('#loginForm').addEventListener('submit', handleLogin);
+  $('#logoutButton').addEventListener('click', logout);
   $('#searchInput').addEventListener('input', renderTable);
   $('#addAgentButton').addEventListener('click', () => openDialog());
-  $('#exportButton').addEventListener('click', exportJSON);
+  $('#exportButton').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(agents, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'agents.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('Data agent diekspor.');
+  });
   $('#agentForm').addEventListener('submit', handleSubmit);
   $('#agentTableBody').addEventListener('click', handleTableAction);
   $('#closeDialogButton').addEventListener('click', () => $('#agentDialog').close());
@@ -354,59 +453,3 @@ async function init() {
 }
 
 init();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
