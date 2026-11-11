@@ -362,6 +362,132 @@ function renderDashboard() {
   $('#app').classList.remove('hidden');
 }
 
+function ensureBnbLookupPanel() {
+  const mount = $('#bnbLookupMount');
+  if (mount) return;
+
+  const container = document.createElement('div');
+  container.id = 'bnbLookupMount';
+  container.className = 'wide-panel';
+  container.innerHTML = `
+    <div class="panel-header">
+      <h3>BNB Agent / Freemint Lookup</h3>
+      <span class="result-badge">ERC-8004 registry</span>
+    </div>
+    <div class="form-grid">
+      <label>
+        Agent ID
+        <input id="bnbAgentId" type="text" placeholder="contoh: 123" />
+      </label>
+      <label>
+        Wallet Address
+        <input id="bnbWallet" type="text" placeholder="0x..." />
+      </label>
+      <label class="full-width-form">
+        Agent Name
+        <input id="bnbName" type="text" placeholder="contoh: my-agent" />
+      </label>
+      <label>
+        Network
+        <select id="bnbNetwork">
+          <option value="bsc-mainnet">BSC Mainnet</option>
+          <option value="bsc-testnet">BSC Testnet</option>
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button class="secondary-btn" type="button" id="bnbClearButton">Reset</button>
+        <button class="primary-btn" type="button" id="bnbSearchButton">Cari</button>
+      </div>
+    </div>
+    <div id="bnbLookupResult" class="detail-content" style="margin-top: 18px; min-height: 100px;">
+      <div class="result-badge">Belum ada pencarian.</div>
+    </div>
+  `;
+
+  const target = $('#statsGrid');
+  if (target && target.parentNode) {
+    target.parentNode.insertBefore(container, target.nextSibling);
+  } else {
+    const app = $('#app');
+    if (app) app.appendChild(container);
+  }
+
+  $('#bnbClearButton').addEventListener('click', () => {
+    $('#bnbAgentId').value = '';
+    $('#bnbWallet').value = '';
+    $('#bnbName').value = '';
+    $('#bnbNetwork').value = 'bsc-mainnet';
+    $('#bnbLookupResult').innerHTML = '<div class="result-badge">Belum ada pencarian.</div>';
+  });
+
+  $('#bnbSearchButton').addEventListener('click', runBnbLookup);
+}
+
+async function runBnbLookup() {
+  const resultBox = $('#bnbLookupResult');
+  if (!resultBox) return;
+
+  const params = {
+    agentId: $('#bnbAgentId').value.trim() || undefined,
+    wallet: $('#bnbWallet').value.trim() || undefined,
+    name: $('#bnbName').value.trim() || undefined,
+    network: $('#bnbNetwork').value || 'bsc-mainnet'
+  };
+
+  if (!params.agentId && !params.wallet && !params.name) {
+    resultBox.innerHTML = '<div class="result-badge">Isi minimal satu filter: Agent ID, wallet, atau name.</div>';
+    return;
+  }
+
+  resultBox.innerHTML = '<div class="result-badge">Mencari data BNB Agent...</div>';
+
+  try {
+    const data = await apiRequest('/bnb/lookup', 'GET', undefined + '');
+    const fallback = await fetch(`${API_URL}/bnb/lookup?${new URLSearchParams({
+      ...(params.agentId ? { agentId: params.agentId } : {}),
+      ...(params.wallet ? { wallet: params.wallet } : {}),
+      ...(params.name ? { name: params.name } : {}),
+      network: params.network
+    })}`, {
+      headers: getAuthHeaders()
+    });
+
+    const json = await fallback.json();
+    if (!fallback.ok) throw new Error(json?.message || 'BNB lookup gagal');
+
+    const rows = (json.results || []).map((item) => `
+      <div class="detail-item wide-item">
+        <span>Agent ${item.agentId ?? '—'}</span>
+        <strong>${escapeHTML(item.name || 'Unnamed')} • ${escapeHTML(item.ownerAddress || '—')} • ${item.freemintCandidate ? 'Freemint candidate' : 'Regular agent'}</strong>
+      </div>
+    `).join('');
+
+    resultBox.innerHTML = `
+      <div class="detail-grid">
+        <div class="detail-item">
+          <span>Network</span>
+          <strong>${escapeHTML(json.network)}</strong>
+        </div>
+        <div class="detail-item">
+          <span>Registry</span>
+          <strong>${escapeHTML(json.registryContract || '—')}</strong>
+        </div>
+        <div class="detail-item">
+          <span>Matched</span>
+          <strong>${json.matched ?? 0}</strong>
+        </div>
+        <div class="detail-item">
+          <span>Source</span>
+          <strong>${escapeHTML(json.source || '—')}</strong>
+        </div>
+        ${rows || '<div class="detail-item wide-item"><span>Hasil</span><strong>Tidak ada agent yang cocok.</strong></div>'}
+      </div>
+    `;
+  } catch (error) {
+    resultBox.innerHTML = `<div class="result-badge">${escapeHTML(error.message || 'Gagal mencari data BNB Agent.')}</div>`;
+  }
+}
+
 async function initDashboard() {
   const user = await loadMe();
   if (!user) {
@@ -373,6 +499,7 @@ async function initDashboard() {
   $('#usernameLabel').textContent = user.username;
   agents = await loadAgents();
   refreshDashboard();
+  ensureBnbLookupPanel();
 }
 
 async function init() {
@@ -412,53 +539,3 @@ async function init() {
 }
 
 init();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
