@@ -1,446 +1,1015 @@
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const { URL } = require('url');
+const API_URL = 'http://localhost:3000/api';
+const statusFilters = ['All', 'Active', 'Pending', 'Alert'];
+const bnbFilters = [
+  { value: 'all', label: 'Semua' },
+  { value: 'freemint', label: 'Freemint only' },
+  { value: 'regular', label: 'Regular only' }
+];
 
-const PORT = 3000;
-const DATA_FILE = path.join(__dirname, 'data', 'agents.json');
-const USERS_FILE = path.join(__dirname, 'data', 'users.json');
-const sessions = new Map();
+let agents = [];
+let selectedStatus = 'All';
+let selectedBnbFilter = 'all';
+let toastTimer;
 
-const BNB_NETWORKS = {
-  'bsc-mainnet': {
-    name: 'bsc-mainnet',
-    chainId: 56,
-    registryContract: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432',
-    scanApi: 'https://www.8004scan.io/api/v1'
-  },
-  'bsc-testnet': {
-    name: 'bsc-testnet',
-    chainId: 97,
-    registryContract: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
-    scanApi: 'https://www.8004scan.io/api/v1'
-  }
-};
+const $ = (selector) => document.querySelector(selector);
 
-function ensureJsonFile(filePath, defaultData) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, JSON.stringify(defaultData, null, 2));
-  }
+function escapeHTML(value = '') {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[character]));
 }
 
-function ensureSeedData() {
-  ensureJsonFile(DATA_FILE, [
-    {
-      id: 'FA-1024',
-      name: 'Maya Rafi',
-      wallet: '0xA4D8...2201',
-      status: 'Active',
-      risk: 'Low',
-      trust: 94,
-      lastSync: '2 min ago',
-      notes: 'Stable sync and healthy latency'
-    },
-    {
-      id: 'FA-1031',
-      name: 'Nadya Chen',
-      wallet: '0xC11A...9E20',
-      status: 'Pending',
-      risk: 'Medium',
-      trust: 78,
-      lastSync: '14 min ago',
-      notes: 'Waiting for validation check'
-    },
-    {
-      id: 'FA-1045',
-      name: 'Rian Suryadi',
-      wallet: '0x71B2...EE89',
-      status: 'Alert',
-      risk: 'High',
-      trust: 52,
-      lastSync: '5 min ago',
-      notes: 'Repeated failed node heartbeat'
-    }
-  ]);
-
-  ensureJsonFile(USERS_FILE, [
-    { username: 'admin', password: 'admin123', role: 'admin' }
-  ]);
+function validAgent(agent) {
+  return agent &&
+    typeof agent.id === 'string' &&
+    typeof agent.name === 'string' &&
+    ['Active', 'Pending', 'Alert'].includes(agent.status) &&
+    ['Low', 'Medium', 'High'].includes(agent.risk) &&
+    Number.isInteger(Number(agent.trust)) &&
+    Number(agent.trust) >= 0 &&
+    Number(agent.trust) <= 100;
 }
 
-function readJson(filePath) {
-  ensureSeedData();
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
-function writeJson(filePath, data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
-
-function readAgents() {
-  return readJson(DATA_FILE);
-}
-
-function writeAgents(data) {
-  writeJson(DATA_FILE, data);
-}
-
-function getUserFromDb(username, password) {
-  const users = readJson(USERS_FILE);
-  return users.find((user) => user.username === username && user.password === password) || null;
-}
-
-function createSession(username) {
-  const token = crypto.randomBytes(24).toString('hex');
-  sessions.set(token, { username, createdAt: Date.now() });
-  return token;
-}
-
-function getSessionFromRequest(req) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  return sessions.get(token) || null;
-}
-
-function sendJson(res, statusCode, data) {
-  res.writeHead(statusCode, {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-  });
-  res.end(JSON.stringify(data, null, 2));
-}
-
-function parseBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', (chunk) => {
-      body += chunk;
-    });
-    req.on('end', () => {
-      if (!body) return resolve({});
-      try {
-        resolve(JSON.parse(body));
-      } catch (error) {
-        reject(new Error('Invalid JSON payload'));
-      }
-    });
-  });
-}
-
-function decodeAgentUri(agentUri) {
-  if (!agentUri || typeof agentUri !== 'string') return null;
-
-  try {
-    if (agentUri.startsWith('data:application/json;base64,')) {
-      const base64 = agentUri.replace(/^data:application\/json;base64,/i, '');
-      const decoded = Buffer.from(base64, 'base64').toString('utf8');
-      return JSON.parse(decoded);
-    }
-    if (agentUri.startsWith('http://') || agentUri.startsWith('https://')) {
-      return null;
-    }
-  } catch (error) {
-    return null;
+function parseNaturalQuery(query = '') {
+  const text = String(query || '').trim().toLowerCase();
+  if (!text) {
+    return { status: null, risk: null, minTrust: null, wallet: null, keywords: [] };
   }
 
-  return null;
-}
-
-function normalizeAgentLookup(item) {
-  const tokenId = item?.token_id ?? item?.agentId ?? item?.id ?? null;
-  const ownerAddress = item?.owner_address ?? item?.ownerAddress ?? '';
-  const agentUri = item?.agent_uri ?? item?.agentUri ?? '';
-  const name = item?.name ?? '';
-  const description = item?.description ?? '';
-  const decodedAgentUri = decodeAgentUri(agentUri);
-  const textBlob = [
-    name,
-    description,
-    ownerAddress,
-    agentUri,
-    decodedAgentUri ? JSON.stringify(decodedAgentUri) : '',
-    Array.isArray(item?.services) ? item.services.map((svc) => JSON.stringify(svc)).join(' ') : ''
-  ].join(' ').toLowerCase();
-
-  const freemintCandidate = /(freemint|free[-\s]?mint|minting|launchpad|campaign)/i.test(textBlob);
+  const tokens = text.split(/\s+/).filter(Boolean);
+  const status = ['active', 'pending', 'alert'].find((value) => tokens.includes(value)) || null;
+  const risk = ['low', 'medium', 'high'].find((value) => tokens.includes(value)) || null;
+  const wallet = tokens.find((token) => token.startsWith('0x')) || null;
+  const minTrustTerm = tokens.find((token) => /^\d+%?$/.test(token));
+  const minTrust = minTrustTerm ? Number(minTrustTerm.replace('%', '')) : null;
 
   return {
-    agentId: tokenId !== null && tokenId !== undefined ? Number(tokenId) : null,
-    name,
-    ownerAddress,
-    network: item?.network || 'bsc-mainnet',
-    registryContract: item?.registryContract || item?.registry_contract || '',
-    agentUri,
-    decodedAgentUri,
-    freemintCandidate,
-    description,
-    source: '8004scan indexer',
-    raw: item
+    status,
+    risk,
+    wallet,
+    minTrust,
+    keywords: tokens.filter((token) => !['active', 'pending', 'alert', 'low', 'medium', 'high', 'trust', 'wallet', 'bnb', 'agent', 'find', 'search', 'show', 'list'].includes(token))
   };
 }
 
-async function fetchBnbAgents(networkName = 'bsc-mainnet') {
-  const network = BNB_NETWORKS[networkName] || BNB_NETWORKS['bsc-mainnet'];
-  const url = new URL(`${network.scanApi}/agents`);
-  url.searchParams.set('chain_id', String(network.chainId));
-  url.searchParams.set('limit', '100');
-  url.searchParams.set('offset', '0');
+function smartFilterAgents(list, query = '') {
+  const filters = parseNaturalQuery(query);
+  const cleaned = String(query || '').trim();
 
-  const response = await fetch(url.toString(), {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(30000)
+  if (!cleaned) {
+    return list;
+  }
+
+  return list.filter((agent) => {
+    const haystack = [agent.id, agent.name, agent.wallet, agent.status, agent.risk, agent.notes].join(' ').toLowerCase();
+    const keywordMatch = !filters.keywords.length || filters.keywords.some((keyword) => haystack.includes(keyword));
+    const statusMatch = !filters.status || agent.status.toLowerCase() === filters.status;
+    const riskMatch = !filters.risk || agent.risk.toLowerCase() === filters.risk;
+    const walletMatch = !filters.wallet || (agent.wallet || '').toLowerCase().includes(filters.wallet);
+    const trustMatch = filters.minTrust === null || Number(agent.trust) >= Number(filters.minTrust);
+    const textMatch = !cleaned || haystack.includes(cleaned) || agent.id.toLowerCase().includes(cleaned) || agent.name.toLowerCase().includes(cleaned);
+    return keywordMatch && statusMatch && riskMatch && walletMatch && trustMatch && textMatch;
   });
+}
+
+function getAuthHeaders() {
+  const token = localStorage.getItem('agentram_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+}
+
+async function apiRequest(path, method = 'GET', payload) {
+  const requestOptions = {
+    method,
+    headers: getAuthHeaders()
+  };
+
+  if (payload !== undefined && !['GET', 'DELETE'].includes(method)) {
+    requestOptions.body = JSON.stringify(payload);
+  }
+
+  const response = await fetch(`${API_URL}${path}`, requestOptions);
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
-    throw new Error(`8004scan API request failed: ${response.status} ${response.statusText}`);
+    throw new Error(data?.message || 'Request failed');
   }
 
-  const data = await response.json();
-  const items = Array.isArray(data?.items) ? data.items : [];
-
-  return {
-    network: network.name,
-    registryContract: network.registryContract,
-    total: Number(data?.total ?? items.length ?? 0),
-    items: items.map(normalizeAgentLookup)
-  };
+  return data;
 }
 
-async function lookupBnbAgent({ agentId, wallet, name, network = 'bsc-mainnet' }) {
-  const networkName = BNB_NETWORKS[network] ? network : 'bsc-mainnet';
-  const { items, total, registryContract } = await fetchBnbAgents(networkName);
-
-  let filtered = items;
-
-  if (agentId !== undefined && agentId !== null && agentId !== '') {
-    filtered = filtered.filter((item) => String(item.agentId) === String(agentId));
+async function loadMe() {
+  try {
+    return await apiRequest('/me');
+  } catch (error) {
+    logout();
+    return null;
   }
-
-  if (wallet) {
-    filtered = filtered.filter((item) => String(item.ownerAddress || '').toLowerCase() === wallet.toLowerCase());
-  }
-
-  if (name) {
-    filtered = filtered.filter((item) => String(item.name || '').toLowerCase().includes(name.toLowerCase()));
-  }
-
-  return {
-    network: networkName,
-    registryContract,
-    total,
-    matched: filtered.length,
-    results: filtered.slice(0, 25),
-    source: '8004scan indexer'
-  };
 }
 
-const server = http.createServer(async (req, res) => {
-  const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+async function loadAgents() {
+  try {
+    const data = await apiRequest('/agents');
+    if (Array.isArray(data) && data.every(validAgent)) {
+      return data;
+    }
+  } catch (error) {
+    console.warn('API load failed:', error.message);
+  }
 
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  return [];
+}
+
+function logout() {
+  localStorage.removeItem('agentram_token');
+  window.location.reload();
+}
+
+function showToast(message) {
+  const toast = $('#toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), 3000);
+}
+
+function statusBadgeClass(status) {
+  return status === 'Active' ? 'green' : status === 'Pending' ? 'yellow' : 'red';
+}
+
+function riskBadgeClass(risk) {
+  return risk === 'Low' ? 'green' : risk === 'Medium' ? 'yellow' : 'red';
+}
+
+function renderStats() {
+  const stats = [
+    { label: 'Total Agent', value: agents.length },
+    { label: 'Active', value: agents.filter((agent) => agent.status === 'Active').length },
+    { label: 'Pending', value: agents.filter((agent) => agent.status === 'Pending').length },
+    { label: 'Alert', value: agents.filter((agent) => agent.status === 'Alert').length }
+  ];
+
+  $('#statsGrid').innerHTML = stats.map((stat) => `
+    <div class="stat-card">
+      <div class="label"><span>${stat.label}</span><span>◈</span></div>
+      <div class="value"><strong>${stat.value}</strong><small>agents</small></div>
+    </div>
+  `).join('');
+}
+
+function renderStatusChart() {
+  const statusCounts = ['Active', 'Pending', 'Alert'].map((status) => ({
+    status,
+    count: agents.filter((agent) => agent.status === status).length
+  }));
+
+  const max = Math.max(...statusCounts.map((item) => item.count), 1);
+  const bars = statusCounts.map(({ status, count }) => `
+    <div class="chart-row">
+      <div class="chart-label">${status}</div>
+      <div class="bar-track">
+        <div class="bar-fill ${statusBadgeClass(status)}" style="width: ${(count / max) * 100}%"></div>
+      </div>
+      <div class="chart-value">${count}</div>
+    </div>
+  `).join('');
+
+  $('#statusChart').innerHTML = bars;
+}
+
+function renderTrustChart() {
+  const total = agents.length || 1;
+  const averageTrust = Math.round(
+    agents.reduce((sum, agent) => sum + Number(agent.trust || 0), 0) / total
+  );
+
+  $('#trustChart').innerHTML = `
+    <div class="ring-wrap">
+      <div class="ring" style="--progress:${averageTrust}; --ring-color:${averageTrust >= 80 ? '#22c55e' : averageTrust >= 60 ? '#fbbf24' : '#f87171'};">
+        <div class="ring-center"><strong>${averageTrust}%</strong></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderFilters() {
+  const container = $('#statusFilters');
+  container.innerHTML = statusFilters.map((status) => `
+    <button class="filter-chip ${selectedStatus === status ? 'active' : ''}" type="button" data-status="${status}">${status}</button>
+  `).join('');
+
+  container.querySelectorAll('.filter-chip').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedStatus = button.dataset.status;
+      renderFilters();
+      renderTable();
     });
-    res.end();
+  });
+}
+
+function renderTable() {
+  const searchValue = $('#searchInput').value.trim();
+  const filteredAgents = smartFilterAgents(
+    agents
+      .filter((agent) => selectedStatus === 'All' || agent.status === selectedStatus)
+      .sort((a, b) => Number(b.trust) - Number(a.trust)),
+    searchValue
+  );
+
+  $('#resultCount').textContent = `${filteredAgents.length} hasil`;
+  const body = $('#agentTableBody');
+
+  if (!filteredAgents.length) {
+    body.innerHTML = '<tr><td colspan="9" class="empty-row">Tidak ada agent yang cocok.</td></tr>';
     return;
   }
 
-  if (parsedUrl.pathname === '/api/health') {
-    sendJson(res, 200, { ok: true, service: 'AgentRam API' });
+  body.innerHTML = filteredAgents.map((agent) => `
+    <tr>
+      <td><strong>${escapeHTML(agent.id)}</strong></td>
+      <td>${escapeHTML(agent.name)}</td>
+      <td>${escapeHTML(agent.wallet || '—')}</td>
+      <td><span class="badge ${statusBadgeClass(agent.status)}"><span class="status-dot"></span>${escapeHTML(agent.status)}</span></td>
+      <td><span class="badge ${riskBadgeClass(agent.risk)}">${escapeHTML(agent.risk)}</span></td>
+      <td><span class="badge ${Number(agent.trust) >= 85 ? 'green' : Number(agent.trust) >= 70 ? 'yellow' : 'blue'}">${Number(agent.trust)}%</span></td>
+      <td>${escapeHTML(agent.lastSync || '—')}</td>
+      <td>${escapeHTML(agent.notes || '—')}</td>
+      <td class="row-actions">
+        <button class="action-btn" type="button" data-action="view" data-id="${escapeHTML(agent.id)}">View</button>
+        <button class="action-btn" type="button" data-action="edit" data-id="${escapeHTML(agent.id)}">Edit</button>
+        <button class="action-btn danger-btn" type="button" data-action="delete" data-id="${escapeHTML(agent.id)}">Hapus</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function refreshDashboard() {
+  renderStats();
+  renderStatusChart();
+  renderTrustChart();
+  renderFilters();
+  renderTable();
+}
+
+function openDialog(agent) {
+  const form = $('#agentForm');
+  form.reset();
+  $('#originalId').value = agent?.id || '';
+  $('#dialogTitle').textContent = agent ? 'Edit Agent' : 'Tambah Agent';
+  $('#agentId').value = agent?.id || '';
+  $('#agentId').readOnly = Boolean(agent);
+  $('#agentName').value = agent?.name || '';
+  $('#agentWallet').value = agent?.wallet || '';
+  $('#agentStatus').value = agent?.status || 'Active';
+  $('#agentRisk').value = agent?.risk || 'Low';
+  $('#agentTrust').value = agent?.trust ?? 80;
+  $('#agentLastSync').value = agent?.lastSync || '';
+  $('#agentNotes').value = agent?.notes || '';
+  $('#agentDialog').showModal();
+  $('#agentId').focus();
+}
+
+function openDetailModal(agent) {
+  $('#detailContent').innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-item">
+        <span>Agent ID</span>
+        <strong>${escapeHTML(agent.id)}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Nama</span>
+        <strong>${escapeHTML(agent.name)}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Wallet</span>
+        <strong>${escapeHTML(agent.wallet || '—')}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Status</span>
+        <strong><span class="badge ${statusBadgeClass(agent.status)}"><span class="status-dot"></span>${escapeHTML(agent.status)}</span></strong>
+      </div>
+      <div class="detail-item">
+        <span>Risk</span>
+        <strong><span class="badge ${riskBadgeClass(agent.risk)}">${escapeHTML(agent.risk)}</span></strong>
+      </div>
+      <div class="detail-item">
+        <span>Trust</span>
+        <strong>${Number(agent.trust)}%</strong>
+      </div>
+      <div class="detail-item">
+        <span>Last Sync</span>
+        <strong>${escapeHTML(agent.lastSync || '—')}</strong>
+      </div>
+      <div class="detail-item wide-item">
+        <span>Notes</span>
+        <strong>${escapeHTML(agent.notes || '—')}</strong>
+      </div>
+    </div>
+  `;
+  $('#agentDetailDialog').showModal();
+}
+
+async function handleSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const originalId = $('#originalId').value;
+  const id = String(formData.get('id') || '').trim();
+
+  if (!id) {
+    $('#agentId').setCustomValidity('Agent ID wajib diisi.');
+    $('#agentId').reportValidity();
+    $('#agentId').setCustomValidity('');
     return;
   }
 
-  if (parsedUrl.pathname === '/api/login') {
-    if (req.method !== 'POST') {
-      sendJson(res, 405, { message: 'Method not allowed' });
-      return;
+  const duplicate = agents.some((agent) => agent.id.toLowerCase() === id.toLowerCase() && agent.id !== originalId);
+
+  if (duplicate) {
+    $('#agentId').setCustomValidity('Agent ID sudah digunakan.');
+    $('#agentId').reportValidity();
+    $('#agentId').setCustomValidity('');
+    return;
+  }
+
+  const agent = {
+    id,
+    name: String(formData.get('name') || '').trim(),
+    wallet: String(formData.get('wallet') || '').trim(),
+    status: String(formData.get('status') || 'Active'),
+    risk: String(formData.get('risk') || 'Low'),
+    trust: Number(formData.get('trust')),
+    lastSync: String(formData.get('lastSync') || '').trim() || 'Baru saja',
+    notes: String(formData.get('notes') || '').trim()
+  };
+
+  try {
+    if (originalId) {
+      await apiRequest('/agents', 'PUT', agent);
+      showToast('Data agent berhasil diperbarui.');
+    } else {
+      await apiRequest('/agents', 'POST', agent);
+      showToast('Agent berhasil ditambahkan.');
     }
 
+    agents = await loadAgents();
+    refreshDashboard();
+    $('#agentDialog').close();
+  } catch (error) {
+    showToast(error.message || 'Gagal menyimpan agent.');
+  }
+}
+
+async function handleTableAction(event) {
+  const button = event.target.closest('button[data-action]');
+  if (!button) return;
+  const agent = agents.find((item) => item.id === button.dataset.id);
+  if (!agent) return;
+
+  if (button.dataset.action === 'view') {
+    openDetailModal(agent);
+  } else if (button.dataset.action === 'edit') {
+    openDialog(agent);
+  } else if (button.dataset.action === 'delete' && confirm(`Hapus agent ${agent.id}?`)) {
     try {
-      const body = await parseBody(req);
-      const user = getUserFromDb(body.username || '', body.password || '');
-      if (!user) {
-        sendJson(res, 401, { message: 'Username atau password salah.' });
-        return;
-      }
-
-      const token = createSession(user.username);
-      sendJson(res, 200, {
-        token,
-        user: { username: user.username, role: user.role }
-      });
-      return;
+      await apiRequest(`/agents?id=${encodeURIComponent(agent.id)}`, 'DELETE');
+      agents = await loadAgents();
+      refreshDashboard();
+      showToast('Agent berhasil dihapus.');
     } catch (error) {
-      sendJson(res, 400, { message: error.message || 'Invalid payload' });
-      return;
+      showToast(error.message || 'Gagal menghapus agent.');
     }
   }
+}
 
-  if (parsedUrl.pathname === '/api/me') {
-    if (req.method !== 'GET') {
-      sendJson(res, 405, { message: 'Method not allowed' });
-      return;
-    }
+async function handleLogin(event) {
+  event.preventDefault();
+  const username = $('#loginUsername').value.trim();
+  const password = $('#loginPassword').value;
+  const submitButton = $('#loginSubmit');
 
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
+  submitButton.disabled = true;
+  submitButton.textContent = 'Masuk...';
 
-    sendJson(res, 200, { username: session.username, role: 'admin' });
-    return;
-  }
-
-  if (parsedUrl.pathname === '/api/agents') {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
-    if (req.method === 'GET') {
-      sendJson(res, 200, readAgents());
-      return;
-    }
-
-    if (req.method === 'POST') {
-      try {
-        const payload = await parseBody(req);
-        const agents = readAgents();
-        const existing = agents.find((agent) => agent.id === payload.id);
-        if (existing) {
-          sendJson(res, 409, { message: 'Agent ID already exists' });
-          return;
-        }
-        agents.unshift(payload);
-        writeAgents(agents);
-        sendJson(res, 201, payload);
-      } catch (error) {
-        sendJson(res, 400, { message: error.message || 'Invalid JSON payload' });
-      }
-      return;
-    }
-
-    if (req.method === 'PUT') {
-      try {
-        const payload = await parseBody(req);
-        const agents = readAgents();
-        const index = agents.findIndex((agent) => agent.id === payload.id);
-        if (index === -1) {
-          sendJson(res, 404, { message: 'Agent not found' });
-          return;
-        }
-
-        agents[index] = { ...agents[index], ...payload };
-        writeAgents(agents);
-        sendJson(res, 200, agents[index]);
-      } catch (error) {
-        sendJson(res, 400, { message: error.message || 'Invalid JSON payload' });
-      }
-      return;
-    }
-
-    if (req.method === 'DELETE') {
-      const id = parsedUrl.searchParams.get('id');
-      if (!id) {
-        sendJson(res, 400, { message: 'Missing id' });
-        return;
-      }
-
-      const agents = readAgents();
-      const filtered = agents.filter((agent) => agent.id !== id);
-      if (filtered.length === agents.length) {
-        sendJson(res, 404, { message: 'Agent not found' });
-        return;
-      }
-
-      writeAgents(filtered);
-      sendJson(res, 200, { message: 'Agent deleted successfully' });
-      return;
-    }
-  }
-
-  if (parsedUrl.pathname === '/api/bnb/lookup') {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
-    if (req.method === 'GET') {
-      try {
-        const agentId = parsedUrl.searchParams.get('agentId');
-        const wallet = parsedUrl.searchParams.get('wallet');
-        const name = parsedUrl.searchParams.get('name');
-        const network = parsedUrl.searchParams.get('network') || 'bsc-mainnet';
-
-        const result = await lookupBnbAgent({
-          agentId: agentId === null ? undefined : agentId,
-          wallet: wallet || undefined,
-          name: name || undefined,
-          network
-        });
-
-        sendJson(res, 200, result);
-      } catch (error) {
-        sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
-      }
-      return;
-    }
-
-    if (req.method === 'POST') {
-      try {
-        const body = await parseBody(req);
-        const result = await lookupBnbAgent({
-          agentId: body.agentId,
-          wallet: body.wallet,
-          name: body.name,
-          network: body.network || 'bsc-mainnet'
-        });
-
-        sendJson(res, 200, result);
-      } catch (error) {
-        sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
-      }
-      return;
-    }
-
-    sendJson(res, 405, { message: 'Method not allowed' });
-    return;
-  }
-
-  if (parsedUrl.pathname === '/api/bnb/health') {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
-    sendJson(res, 200, {
-      ok: true,
-      network: 'bsc-mainnet',
-      registryContract: BNB_NETWORKS['bsc-mainnet'].registryContract,
-      source: '8004scan indexer',
-      note: 'Official ERC-8004 registry lookup endpoint for BNB agent records.'
+  try {
+    const data = await fetch(`${API_URL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    }).then(async (response) => {
+      const text = await response.text();
+      const json = text ? JSON.parse(text) : null;
+      if (!response.ok) throw new Error(json?.message || 'Login gagal');
+      return json;
     });
+
+    localStorage.setItem('agentram_token', data.token);
+    $('#loginForm').reset();
+    initDashboard();
+  } catch (error) {
+    $('#loginError').textContent = error.message || 'Login gagal';
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = 'Masuk';
+  }
+}
+
+function renderLogin() {
+  $('#app').classList.add('hidden');
+  $('#loginScreen').classList.remove('hidden');
+}
+
+function renderDashboard() {
+  $('#loginScreen').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+}
+
+function ensureBnbLookupPanel() {
+  const existingRoot = $('#bnbLookupMount');
+  if (existingRoot) return;
+
+  const container = document.createElement('div');
+  container.id = 'bnbLookupMount';
+  container.className = 'wide-panel';
+  container.innerHTML = `
+    <div class="panel-header">
+      <h3>BNB Agent / Freemint Lookup</h3>
+      <span class="result-badge">ERC-8004 registry</span>
+    </div>
+    <div class="form-grid">
+      <label>
+        Agent ID
+        <input id="bnbAgentId" type="text" placeholder="contoh: 123" />
+      </label>
+      <label>
+        Wallet Address
+        <input id="bnbWallet" type="text" placeholder="0x..." />
+      </label>
+      <label class="full-width-form">
+        Agent Name
+        <input id="bnbName" type="text" placeholder="contoh: my-agent" />
+      </label>
+      <label>
+        Network
+        <select id="bnbNetwork">
+          <option value="bsc-mainnet">BSC Mainnet</option>
+          <option value="bsc-testnet">BSC Testnet</option>
+        </select>
+      </label>
+      <label>
+        Filter
+        <select id="bnbFilterScope">
+          ${bnbFilters.map((item) => `<option value="${item.value}">${item.label}</option>`).join('')}
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button class="secondary-btn" type="button" id="bnbClearButton">Reset</button>
+        <button class="primary-btn" type="button" id="bnbSearchButton">Cari</button>
+      </div>
+    </div>
+    <div id="bnbLookupResult" class="detail-content" style="margin-top: 18px; min-height: 100px;">
+      <div class="result-badge">Belum ada pencarian.</div>
+    </div>
+  `;
+
+  const target = $('#statsGrid');
+  if (target && target.parentNode) {
+    target.parentNode.insertBefore(container, target.nextSibling);
+  } else {
+    $('#app').appendChild(container);
+  }
+
+  $('#bnbClearButton').addEventListener('click', () => {
+    $('#bnbAgentId').value = '';
+    $('#bnbWallet').value = '';
+    $('#bnbName').value = '';
+    $('#bnbNetwork').value = 'bsc-mainnet';
+    $('#bnbFilterScope').value = 'all';
+    selectedBnbFilter = 'all';
+    $('#bnbLookupResult').innerHTML = '<div class="result-badge">Belum ada pencarian.</div>';
+  });
+
+  $('#bnbFilterScope').addEventListener('change', (event) => {
+    selectedBnbFilter = event.target.value;
+    if ($('#bnbLookupResult').textContent.trim() && !$('#bnbLookupResult').textContent.includes('Belum ada pencarian')) {
+      runBnbLookup();
+    }
+  });
+
+  $('#bnbSearchButton').addEventListener('click', runBnbLookup);
+}
+
+async function runBnbLookup() {
+  const resultBox = $('#bnbLookupResult');
+  if (!resultBox) return;
+
+  const params = {
+    agentId: $('#bnbAgentId').value.trim() || undefined,
+    wallet: $('#bnbWallet').value.trim() || undefined,
+    name: $('#bnbName').value.trim() || undefined,
+    network: $('#bnbNetwork').value || 'bsc-mainnet'
+  };
+
+  if (!params.agentId && !params.wallet && !params.name) {
+    resultBox.innerHTML = '<div class="result-badge">Isi minimal satu filter: Agent ID, wallet, atau name.</div>';
     return;
   }
 
-  sendJson(res, 404, { message: 'Not found' });
-});
+  if (params.agentId && (!Number.isInteger(Number(params.agentId)) || Number(params.agentId) < 0)) {
+    resultBox.innerHTML = '<div class="result-badge">Agent ID harus berupa angka bulat yang valid.</div>';
+    return;
+  }
 
-server.listen(PORT, () => {
-  console.log(`AgentRam API running at http://localhost:${PORT}`);
-  console.log('Default login: admin / admin123');
-  console.log('BNB Agent lookup: /api/bnb/lookup?agentId=123&network=bsc-mainnet');
-});
+  if (params.wallet && !/^0x[0-9a-fA-F]+$/.test(params.wallet)) {
+    resultBox.innerHTML = '<div class="result-badge">Wallet harus berupa alamat 0x yang valid.</div>';
+    return;
+  }
 
-module.exports = server;
+  resultBox.innerHTML = '<div class="result-badge">Mencari data BNB Agent...</div>';
+
+  try {
+    const query = new URLSearchParams({
+      ...(params.agentId ? { agentId: params.agentId } : {}),
+      ...(params.wallet ? { wallet: params.wallet } : {}),
+      ...(params.name ? { name: params.name } : {}),
+      network: params.network
+    });
+
+    const response = await fetch(`${API_URL}/bnb/lookup?${query.toString()}`, {
+      headers: getAuthHeaders()
+    });
+
+    const json = await response.json();
+    if (!response.ok) throw new Error(json?.message || 'BNB lookup gagal');
+
+    const allResults = Array.isArray(json.results) ? json.results : [];
+    const filteredResults = selectedBnbFilter === 'freemint'
+      ? allResults.filter((item) => item.freemintCandidate)
+      : selectedBnbFilter === 'regular'
+        ? allResults.filter((item) => !item.freemintCandidate)
+        : allResults;
+
+    const rows = filteredResults.map((item) => `
+      <div class="detail-item wide-item">
+        <span>Agent ${item.agentId ?? '—'}</span>
+        <strong>${escapeHTML(item.name || 'Unnamed')} • ${escapeHTML(item.ownerAddress || '—')} • ${item.freemintCandidate ? 'Freemint candidate' : 'Regular agent'}</strong>
+      </div>
+    `).join('');
+
+    resultBox.innerHTML = `
+      <div class="detail-grid">
+        <div class="detail-item">
+          <span>Network</span>
+          <strong>${escapeHTML(json.network || params.network)}</strong>
+        </div>
+        <div class="detail-item">
+          <span>Registry</span>
+          <strong>${escapeHTML(json.registryContract || '—')}</strong>
+        </div>
+        <div class="detail-item">
+          <span>Matched</span>
+          <strong>${filteredResults.length ?? 0}</strong>
+        </div>
+        <div class="detail-item">
+          <span>Source</span>
+          <strong>${escapeHTML(json.source || '—')}</strong>
+        </div>
+        ${rows || '<div class="detail-item wide-item"><span>Hasil</span><strong>Tidak ada agent yang cocok dengan filter saat ini.</strong></div>'}
+      </div>
+    `;
+  } catch (error) {
+    resultBox.innerHTML = `<div class="result-badge">${escapeHTML(error.message || 'Gagal mencari data BNB Agent.')}</div>`;
+  }
+}
+
+async function initDashboard() {
+  const user = await loadMe();
+  if (!user) {
+    renderLogin();
+    return;
+  }
+
+  renderDashboard();
+  $('#usernameLabel').textContent = user.username;
+  agents = await loadAgents();
+  refreshDashboard();
+  ensureBnbLookupPanel();
+}
+
+async function init() {
+  const token = localStorage.getItem('agentram_token');
+  if (!token) {
+    renderLogin();
+  } else {
+    await initDashboard();
+  }
+
+  $('#loginForm').addEventListener('submit', handleLogin);
+  $('#logoutButton').addEventListener('click', logout);
+  $('#searchInput').addEventListener('input', renderTable);
+  $('#addAgentButton').addEventListener('click', () => openDialog());
+  $('#exportButton').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(agents, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'agents.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('Data agent diekspor.');
+  });
+  $('#agentForm').addEventListener('submit', handleSubmit);
+  $('#agentTableBody').addEventListener('click', handleTableAction);
+  $('#closeDialogButton').addEventListener('click', () => $('#agentDialog').close());
+  $('#cancelDialogButton').addEventListener('click', () => $('#agentDialog').close());
+  $('#closeDetailDialogButton').addEventListener('click', () => $('#agentDetailDialog').close());
+  $('#detailCloseButton').addEventListener('click', () => $('#agentDetailDialog').close());
+  $('#agentDialog').addEventListener('click', (event) => {
+    if (event.target === $('#agentDialog')) $('#agentDialog').close();
+  });
+  $('#agentDetailDialog').addEventListener('click', (event) => {
+    if (event.target === $('#agentDetailDialog')) $('#agentDetailDialog').close();
+  });
+}
+
+init();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+n
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"}]}  

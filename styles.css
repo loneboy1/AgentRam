@@ -20,7 +20,7 @@
           </div>
         </div>
 
-        <form id="loginForm" class="auth-form">
+        <form id="loginForm" class="auth-form" novalidate>
           <label>
             <span>Username</span>
             <input id="loginUsername" type="text" value="admin" required />
@@ -172,30 +172,3 @@
     <script src="app.js"></script>
   </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
