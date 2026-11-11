@@ -437,10 +437,10 @@ const server = http.createServer(async (req, res) => {
   sendJson(res, 404, { message: 'Not found' });
 });
 
-server.listen(PORT, () => {
-  console.log(`AgentRam API running at http://localhost:${PORT}`);
-  console.log('Default login: admin / admin123');
-  console.log('BNB Agent lookup: /api/bnb/lookup?agentId=123&network=bsc-mainnet');
-});
+if (process.env.NODE_ENV !== 'production') {
+  server.listen(PORT, () => {
+    console.log(`AgentRam API running at http://localhost:${PORT}`);
+  });
+}
 
 module.exports = server;
