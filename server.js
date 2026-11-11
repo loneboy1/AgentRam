@@ -7,6 +7,11 @@ const { URL } = require('url');
 const PORT = 3000;
 const DATA_FILE = path.join(__dirname, 'data', 'agents.json');
 const USERS_FILE = path.join(__dirname, 'data', 'users.json');
+const BNB_RPC_URL = process.env.BNB_RPC_URL || 'https://bsc-dataseed.binance.org/';
+const FREEMINT_CONTRACTS = {
+  agentToken: '0xA2643B889eEb232708a644f15f70f951773dDEF9',
+  agentIdRegistry: '0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F'
+};
 const sessions = new Map();
 
 function ensureJsonFile(filePath, defaultData) {
@@ -153,7 +158,6 @@ function parseQuery(query = '') {
 
   const minTrustToken = tokens.find((token) => /^trust[><=]?\d+$/.test(token) || /^\d+%?$/.test(token));
   const minTrust = minTrustToken ? Number(String(minTrustToken).replace(/[^\d]/g, '')) : null;
-
   const walletToken = tokens.find((token) => token.startsWith('0x')) || null;
 
   return {
@@ -162,7 +166,9 @@ function parseQuery(query = '') {
     risk,
     minTrust,
     wallet: walletToken,
-    keywords: tokens.filter((token) => !['active', 'pending', 'alert', 'low', 'medium', 'high', 'trust', 'wallet', 'bnb', 'agent', 'search', 'find', 'show', 'list'].includes(token))
+    keywords: tokens.filter((token) =>
+      !['active', 'pending', 'alert', 'low', 'medium', 'high', 'trust', 'wallet', 'bnb', 'agent', 'search', 'find', 'show', 'list'].includes(token)
+    )
   };
 }
 
@@ -214,6 +220,39 @@ function smartSearchAgents(query = '', list = []) {
   };
 }
 
+async function rpcRequest(method, params = []) {
+  const response = await fetch(BNB_RPC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`BNB RPC request failed: ${response.status} ${text}`);
+  }
+
+  const data = text ? JSON.parse(text) : null;
+  if (!data || data.error) {
+    throw new Error(data?.error?.message || 'BNB RPC returned no data');
+  }
+
+  return data.result;
+}
+
+async function getBnbHealthSummary() {
+  const chainIdHex = await rpcRequest('eth_chainId');
+  const blockNumberHex = await rpcRequest('eth_blockNumber');
+
+  return {
+    rpc: BNB_RPC_URL,
+    chainId: Number.parseInt(chainIdHex, 16),
+    blockNumber: Number.parseInt(blockNumberHex, 16),
+    contracts: FREEMINT_CONTRACTS,
+    status: 'connected'
+  };
+}
+
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json',
@@ -257,6 +296,54 @@ const server = http.createServer(async (req, res) => {
   if (parsedUrl.pathname === '/api/health') {
     sendJson(res, 200, { ok: true, service: 'AgentRam API' });
     return;
+  }
+
+  if (parsedUrl.pathname === '/api/bnb/health') {
+    try {
+      const summary = await getBnbHealthSummary();
+      sendJson(res, 200, summary);
+      return;
+    } catch (error) {
+      sendJson(res, 502, {
+        status: 'disconnected',
+        rpc: BNB_RPC_URL,
+        message: error.message || 'Unable to reach BNB RPC'
+      });
+      return;
+    }
+  }
+
+  if (parsedUrl.pathname === '/api/bnb/contracts') {
+    sendJson(res, 200, {
+      source: 'BNB Smart Chain public RPC / BscScan references',
+      contracts: FREEMINT_CONTRACTS,
+      notes: [
+        'Agent token contract reference: 0xA2643B889eEb232708a644f15f70f951773dDEF9',
+        'Agent ID registry reference: 0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F'
+      ]
+    });
+    return;
+  }
+
+  if (parsedUrl.pathname === '/api/bnb/search') {
+    const query = parsedUrl.searchParams.get('q') || parsedUrl.searchParams.get('wallet') || '';
+    try {
+      const summary = await getBnbHealthSummary();
+      const result = smartSearchAgents(query, readAgents());
+      sendJson(res, 200, {
+        ...result,
+        chain: summary,
+        searchedContracts: FREEMINT_CONTRACTS,
+        note: 'This step verifies BNB RPC connectivity and prepares AgentRam for real on-chain Freemint Agent ID queries.'
+      });
+      return;
+    } catch (error) {
+      sendJson(res, 400, {
+        message: error.message || 'BNB agent search failed',
+        searchedContracts: FREEMINT_CONTRACTS
+      });
+      return;
+    }
   }
 
   if (parsedUrl.pathname === '/api/search' || parsedUrl.pathname === '/api/agents/search') {
@@ -394,74 +481,10 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`AgentRam API running at http://localhost:${PORT}`);
   console.log('Default login: admin / admin123');
-  console.log('AI search examples: /api/search?q=alert high risk');
+  console.log('BNB RPC endpoint: ' + BNB_RPC_URL);
+  console.log('BNB contract references:');
+  console.log(' - Agent token: ' + FREEMINT_CONTRACTS.agentToken);
+  console.log(' - Agent ID registry: ' + FREEMINT_CONTRACTS.agentIdRegistry);
 });
 
 module.exports = server;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
