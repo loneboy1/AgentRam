@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Tentang AgentRam, dashboard monitoring dan direktori sumber untuk riset Agent ID di BNB Chain." />
+  <title>Tentang AgentRam</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07111d;--panel:#101f2f;--line:rgba(148,163,184,.18);--text:#edf5ff;--muted:#a6b6cb;--accent:#4cc9f0;--yellow:#fbbf24}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#122540 0%,var(--bg) 42%,#040d18 100%);color:var(--text);font:16px/1.65 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:#8fe5fa;text-decoration:none}a:hover{text-decoration:underline}.shell{width:min(980px,calc(100% - 36px));margin:0 auto;padding:32px 0 56px}.top{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:42px}.brand{display:flex;align-items:center;gap:12px}.mark{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-weight:800;background:linear-gradient(135deg,var(--accent),#7c4dff);color:#02131d}.eyebrow{margin:0 0 5px;color:var(--muted);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase}.brand h1,.hero h2,.panel h3{margin:0}.hero{margin:44px 0 28px}.hero h2{font-size:clamp(2rem,5vw,3.2rem);line-height:1.12;max-width:780px}.hero .intro{color:var(--muted);font-size:1.08rem;max-width:780px}.panel{margin:16px 0;padding:22px;background:rgba(16,31,47,.88);border:1px solid var(--line);border-radius:18px;box-shadow:0 16px 32px rgba(2,6,23,.25)}.panel h3{font-size:1.2rem;margin-bottom:10px}.panel p{color:var(--muted);margin:8px 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.list{padding-left:22px;color:var(--muted)}.list li{margin:7px 0}.callout{border-color:rgba(251,191,36,.28);background:rgba(251,191,36,.06)}.callout p{color:#f6dfa0}.links{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}.button{display:inline-flex;align-items:center;padding:10px 14px;border:1px solid var(--line);border-radius:11px;background:rgba(148,163,184,.08)}.button.primary{color:#041722;background:linear-gradient(135deg,var(--accent),#60a5fa);border:0;font-weight:700}.footer{margin-top:30px;color:var(--muted);font-size:.88rem}
+    @media(max-width:680px){.shell{width:min(100% - 24px,600px);padding-top:20px}.top{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:1fr}.panel{padding:18px}.hero{margin-top:28px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top">
+      <div class="brand"><div class="mark" aria-hidden="true">A</div><div><p class="eyebrow">AgentRam · About</p><h1>Tentang proyek</h1></div></div>
+      <a href="index.html">← Kembali ke dashboard</a>
+    </header>
+    <section class="hero">
+      <p class="eyebrow">Monitoring · research · source discovery</p>
+      <h2>Memusatkan pantauan agent dan sumber riset Agent ID.</h2>
+      <p class="intro">AgentRam adalah dashboard ringan untuk mencatat dan meninjau data agent, serta direktori sumber untuk menemukan lead mint dan kampanye yang berkaitan dengan Agent ID di BNB Chain.</p>
+    </section>
+    <div class="grid">
+      <section class="panel">
+        <h3>Apa yang tersedia</h3>
+        <ul class="list">
+          <li>Dashboard lokal untuk mengelola catatan agent, status, tingkat risiko, trust score, dan pencarian.</li>
+          <li>Panel lookup BNB ERC-8004 melalui API lokal dan indexer 8004scan.</li>
+          <li>Direktori sumber yang bisa dicari dan difilter menurut kategori.</li>
+          <li>Status pemeriksaan manual yang disimpan di browser pengguna.</li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h3>Tujuan watchlist</h3>
+        <p>Watchlist mengelompokkan katalog Agent ID, kalender mint, explorer, pengumuman, feed komunitas, pencarian sosial/web, dan beberapa tool riset. Tujuannya membantu menemukan lead serta memeriksa sumbernya—bukan menyatakan kampanye tertentu aman atau aktif.</p>
+      </section>
+    </div>
+    <section class="panel">
+      <h3>Cara meninjau sebuah lead</h3>
+      <ol class="list">
+        <li>Mulai dari katalog, kalender, pencarian, atau postingan komunitas sebagai petunjuk saja.</li>
+        <li>Temukan kanal resmi proyek dan cek bahwa pengumuman masih berlaku.</li>
+        <li>Periksa jaringan, alamat kontrak, status/verifikasi kontrak, harga, eligibility Agent ID, supply, dan transaksi di explorer tepercaya.</li>
+        <li>Anggap klaim “free” sebagai belum terverifikasi sampai biaya dan syaratnya dicek. Mint gratis tetap dapat memerlukan biaya gas.</li>
+        <li>Jangan pernah memberikan seed phrase, private key, kata sandi, atau kredensial wallet kepada situs atau agent.</li>
+      </ol>
+    </section>
+    <section class="panel callout">
+      <h3>Batasan dan keamanan</h3>
+      <p>AgentRam tidak otomatis memantau semua situs eksternal, memverifikasi klaim kampanye, atau mengeksekusi mint. Tautan komunitas dapat kedaluwarsa, salah, atau berbahaya. URL Boltbook kanonis dan tautan trycloudflare Agent Radar yang spesifik belum tersedia, sehingga entri tersebut ditandai sebagai placeholder pencarian.</p>
+      <p>API saat ini ditujukan untuk penggunaan lokal. Sebelum dipublikasikan di jaringan, ganti kredensial demo, amankan autentikasi, dan konfigurasi frontend ke backend yang dikelola dengan aman. GitHub Pages hanya menyajikan file statis dan tidak menjalankan Node API.</p>
+    </section>
+    <section class="panel">
+      <h3>Jelajahi AgentRam</h3>
+      <p>Baca petunjuk setup dan catatan deployment di README repository.</p>
+      <div class="links">
+        <a class="button primary" href="watchlist.html">Buka Daftar Pantauan</a>
+        <a class="button" href="index.html">Dashboard</a>
+        <a class="button" href="https://github.com/loneboy1/AgentRam">Repository GitHub</a>
+        <a class="button" href="README.md">README</a>
+      </div>
+    </section>
+    <p class="footer">AgentRam adalah alat monitoring dan riset komunitas. Informasi dalam repo ini bukan nasihat finansial, endorsement, atau jaminan keamanan maupun hasil.</p>
+  </main>
+</body>
+</html>
