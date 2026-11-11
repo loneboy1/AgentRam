@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'agentram.agents.v1';
+const API_URL = 'http://localhost:3000/api/agents';
 const statusFilters = ['All', 'Active', 'Pending', 'Alert'];
 let agents = [];
 let selectedStatus = 'All';
@@ -19,34 +19,53 @@ function validAgent(agent) {
     Number.isInteger(Number(agent.trust)) && Number(agent.trust) >= 0 && Number(agent.trust) <= 100;
 }
 
-function saveAgents() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(agents));
-  } catch (error) {
-    showToast('Tidak dapat menyimpan data di browser ini.');
+async function apiRequest(method, payload, id = null) {
+  const options = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+
+  if (payload !== undefined) options.body = JSON.stringify(payload);
+
+  const url = id ? `${API_URL}?id=${encodeURIComponent(id)}` : API_URL;
+  const response = await fetch(url, options);
+  const contentType = response.headers.get('content-type') || '';
+  const result = contentType.includes('application/json') ? await response.json() : await response.text();
+
+  if (!response.ok) {
+    throw new Error(typeof result === 'object' && result && result.message ? result.message : 'Request failed');
   }
+
+  return result;
 }
 
 async function loadAgents() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.every(validAgent)) return parsed;
+    const data = await apiRequest('GET');
+    if (Array.isArray(data) && data.every(validAgent)) {
+      return data;
     }
   } catch (error) {
-    localStorage.removeItem(STORAGE_KEY);
+    console.warn('API load failed:', error.message);
   }
 
   try {
-    const response = await fetch('./agents.json');
-    if (!response.ok) throw new Error('Gagal memuat agents.json');
-    const parsed = await response.json();
-    if (!Array.isArray(parsed) || !parsed.every(validAgent)) throw new Error('Format agents.json tidak valid');
-    return parsed;
+    const fallback = JSON.parse(localStorage.getItem('agentram_local_fallback') || '[]');
+    if (Array.isArray(fallback) && fallback.every(validAgent)) {
+      return fallback;
+    }
   } catch (error) {
-    showToast('Data JSON tidak termuat. Jalankan lewat server lokal (lihat README).');
-    return [];
+    // ignore fallback parse issue
+  }
+
+  return [];
+}
+
+function saveAgentsLocally() {
+  try {
+    localStorage.setItem('agentram_local_fallback', JSON.stringify(agents));
+  } catch (error) {
+    // ignore local storage errors
   }
 }
 
@@ -65,9 +84,12 @@ function renderStats() {
     { label: 'Pending', value: agents.filter((agent) => agent.status === 'Pending').length },
     { label: 'Alert', value: agents.filter((agent) => agent.status === 'Alert').length }
   ];
+
   $('#statsGrid').innerHTML = stats.map((stat) => `
-    <div class="stat-card"><div class="label"><span>${stat.label}</span><span>◈</span></div>
-    <div class="value"><strong>${stat.value}</strong><small>agents</small></div></div>
+    <div class="stat-card">
+      <div class="label"><span>${stat.label}</span><span>◈</span></div>
+      <div class="value"><strong>${stat.value}</strong><small>agents</small></div>
+    </div>
   `).join('');
 }
 
@@ -111,6 +133,7 @@ function renderFilters() {
   container.innerHTML = statusFilters.map((status) => `
     <button class="filter-chip ${selectedStatus === status ? 'active' : ''}" type="button" data-status="${status}">${status}</button>
   `).join('');
+
   container.querySelectorAll('.filter-chip').forEach((button) => {
     button.addEventListener('click', () => {
       selectedStatus = button.dataset.status;
@@ -130,6 +153,7 @@ function renderTable() {
 
   $('#resultCount').textContent = `${filteredAgents.length} hasil`;
   const body = $('#agentTableBody');
+
   if (!filteredAgents.length) {
     body.innerHTML = '<tr><td colspan="9" class="empty-row">Tidak ada agent yang cocok.</td></tr>';
     return;
@@ -241,12 +265,13 @@ function exportJSON() {
   showToast('Data agent diekspor sebagai JSON.');
 }
 
-function handleSubmit(event) {
+async function handleSubmit(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const originalId = $('#originalId').value;
   const id = formData.get('id').trim();
   const duplicate = agents.some((agent) => agent.id.toLowerCase() === id.toLowerCase() && agent.id !== originalId);
+
   if (duplicate) {
     $('#agentId').setCustomValidity('Agent ID sudah digunakan.');
     $('#agentId').reportValidity();
@@ -265,19 +290,25 @@ function handleSubmit(event) {
     notes: formData.get('notes').trim()
   };
 
-  if (originalId) {
-    agents = agents.map((item) => item.id === originalId ? agent : item);
-    showToast('Data agent berhasil diperbarui.');
-  } else {
-    agents.unshift(agent);
-    showToast('Agent berhasil ditambahkan.');
+  try {
+    if (originalId) {
+      await apiRequest('PUT', agent);
+      showToast('Data agent berhasil diperbarui.');
+    } else {
+      await apiRequest('POST', agent);
+      showToast('Agent berhasil ditambahkan.');
+    }
+
+    agents = await loadAgents();
+    saveAgentsLocally();
+    refreshDashboard();
+    $('#agentDialog').close();
+  } catch (error) {
+    showToast(error.message || 'Gagal menyimpan agent.');
   }
-  saveAgents();
-  refreshDashboard();
-  $('#agentDialog').close();
 }
 
-function handleTableAction(event) {
+async function handleTableAction(event) {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
   const agent = agents.find((item) => item.id === button.dataset.id);
@@ -288,16 +319,23 @@ function handleTableAction(event) {
   } else if (button.dataset.action === 'edit') {
     openDialog(agent);
   } else if (button.dataset.action === 'delete' && confirm(`Hapus agent ${agent.id}?`)) {
-    agents = agents.filter((item) => item.id !== agent.id);
-    saveAgents();
-    refreshDashboard();
-    showToast('Agent berhasil dihapus.');
+    try {
+      await apiRequest('DELETE', undefined, agent.id);
+      agents = await loadAgents();
+      saveAgentsLocally();
+      refreshDashboard();
+      showToast('Agent berhasil dihapus.');
+    } catch (error) {
+      showToast(error.message || 'Gagal menghapus agent.');
+    }
   }
 }
 
 async function init() {
   agents = await loadAgents();
+  saveAgentsLocally();
   refreshDashboard();
+
   $('#searchInput').addEventListener('input', renderTable);
   $('#addAgentButton').addEventListener('click', () => openDialog());
   $('#exportButton').addEventListener('click', exportJSON);
@@ -316,3 +354,59 @@ async function init() {
 }
 
 init();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
