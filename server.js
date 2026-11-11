@@ -1,17 +1,11 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const { URL } = require('url');
 require('dotenv').config();
 
 const PORT = Number(process.env.PORT) || 3000;
 const DATA_FILE = path.join('/tmp', 'agents.json');
-const USERS_FILE = path.join('/tmp', 'users.json');
-const DEFAULT_USERNAME = process.env.APP_USERNAME || 'admin';
-const DEFAULT_PASSWORD = process.env.APP_PASSWORD || 'ChangeMeStrong!2026';
-
-const sessions = new Map();
 
 const BNB_NETWORKS = {
   'bsc-mainnet': {
@@ -27,10 +21,6 @@ const BNB_NETWORKS = {
     scanApi: 'https://www.8004scan.io/api/v1'
   }
 };
-
-function hashValue(value) {
-  return crypto.createHash('sha256').update(String(value)).digest('hex');
-}
 
 function ensureJsonFile(filePath, defaultData) {
   const dir = path.dirname(filePath);
@@ -71,14 +61,6 @@ function ensureSeedData() {
       trust: 52,
       lastSync: '5 min ago',
       notes: 'Repeated failed node heartbeat'
-    }
-  ]);
-
-  ensureJsonFile(USERS_FILE, [
-    {
-      username: DEFAULT_USERNAME,
-      password: hashValue(DEFAULT_PASSWORD),
-      role: 'admin'
     }
   ]);
 }
@@ -130,42 +112,6 @@ function sanitizeAgentPayload(payload) {
     lastSync: String(payload.lastSync || 'Baru saja').trim() || 'Baru saja',
     notes: String(payload.notes || '').trim()
   };
-}
-
-function getUserFromDb(username, password) {
-  const users = readJson(USERS_FILE);
-  const user = users.find((entry) => entry.username === username);
-
-  if (!user) return null;
-
-  if (user.password === hashValue(password)) return user;
-  if (user.password === password) return user; // legacy compatibility
-
-  return null;
-}
-
-function createSession(username) {
-  const token = crypto.randomBytes(24).toString('hex');
-  sessions.set(token, {
-    username,
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 1000 * 60 * 60 * 8
-  });
-  return token;
-}
-
-function getSessionFromRequest(req) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const session = sessions.get(token);
-
-  if (!session) return null;
-  if (session.expiresAt < Date.now()) {
-    sessions.delete(token);
-    return null;
-  }
-
-  return session;
 }
 
 function sendJson(res, statusCode, data) {
@@ -322,68 +268,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (parsedUrl.pathname === '/api/login') {
-    if (req.method !== 'POST') {
-      sendJson(res, 405, { message: 'Method not allowed' });
-      return;
-    }
-
-    try {
-      const body = await parseBody(req);
-      const username = String(body.username || '').trim();
-      const password = String(body.password || '');
-
-      if (!username || !password) {
-        sendJson(res, 400, { message: 'Username dan password wajib diisi.' });
-        return;
-      }
-
-      const user = getUserFromDb(username, password);
-
-      if (!user) {
-        sendJson(res, 401, { message: 'Username atau password salah.' });
-        return;
-      }
-
-      const token = createSession(user.username);
-
-      sendJson(res, 200, {
-        token,
-        user: {
-          username: user.username,
-          role: user.role
-        }
-      });
-      return;
-    } catch (error) {
-      sendJson(res, 400, { message: error.message || 'Invalid payload' });
-      return;
-    }
-  }
-
-  if (parsedUrl.pathname === '/api/me') {
-    if (req.method !== 'GET') {
-      sendJson(res, 405, { message: 'Method not allowed' });
-      return;
-    }
-
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
-    sendJson(res, 200, { username: session.username, role: 'admin' });
-    return;
-  }
-
   if (parsedUrl.pathname === '/api/agents') {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
     if (req.method === 'GET') {
       sendJson(res, 200, readAgents());
       return;
@@ -451,12 +336,6 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (parsedUrl.pathname === '/api/bnb/lookup') {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
     if (req.method === 'GET') {
       try {
         const agentId = parsedUrl.searchParams.get('agentId');
@@ -490,78 +369,3 @@ const server = http.createServer(async (req, res) => {
 
         sendJson(res, 200, result);
       } catch (error) {
-        sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
-      }
-      return;
-    }
-
-    sendJson(res, 405, { message: 'Method not allowed' });
-    return;
-  }
-
-  if (parsedUrl.pathname === '/api/bnb/health') {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
-    sendJson(res, 200, {
-      ok: true,
-      network: 'bsc-mainnet',
-      registryContract: BNB_NETWORKS['bsc-mainnet'].registryContract,
-      source: '8004scan indexer',
-      note: 'Official ERC-8004 registry lookup endpoint for BNB agent records.'
-    });
-    return;
-  }
-  if (!parsedUrl.pathname.startsWith('/api/')) {
-    try {
-      if (parsedUrl.pathname === '/' || parsedUrl.pathname === '/index.html') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(fs.readFileSync(path.join(__dirname, 'index.html')));
-        return;
-      }
-      if (parsedUrl.pathname === '/dashboard.js') {
-        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
-        res.end(fs.readFileSync(path.join(__dirname, 'dashboard.js')));
-        return;
-      }
-      if (parsedUrl.pathname === '/styles.css') {
-        res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' });
-        res.end(fs.readFileSync(path.join(__dirname, 'styles.css')));
-        return;
-      }
-      if (parsedUrl.pathname === '/about.html') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(fs.readFileSync(path.join(__dirname, 'about.html')));
-        return;
-      }
-      if (parsedUrl.pathname === '/watchlist.html') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(fs.readFileSync(path.join(__dirname, 'watchlist.html')));
-        return;
-      }
-      if (parsedUrl.pathname === '/agents.json') {
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(fs.readFileSync(path.join(__dirname, 'agents.json')));
-        return;
-      }
-    } catch (error) {
-      sendJson(res, 404, { message: 'Not found' });
-      return;
-    }
-  }
-  sendJson(res, 404, { message: 'Not found' });
-});
-
-if (process.env.NODE_ENV !== 'production') {
-  server.listen(PORT, () => {
-    console.log(`AgentRam API running at http://localhost:${PORT}`);
-    console.log(`Login username: ${DEFAULT_USERNAME}`);
-    console.log(`Password: ${DEFAULT_PASSWORD}`);
-    console.log('BNB Agent lookup: /api/bnb/lookup?agentId=123&network=bsc-mainnet');
-  });
-}
-
-module.exports = (req, res) => server.emit('request', req, res);
