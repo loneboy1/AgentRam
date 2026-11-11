@@ -338,6 +338,63 @@ async function handleTableAction(event) {
   }
 }
 
+function setActiveMenu(menu) {
+  document.querySelectorAll('.nav a[data-menu]').forEach((link) => {
+    link.classList.toggle('active', link.dataset.menu === menu);
+  });
+}
+
+function exportAgents() {
+  const blob = new Blob([JSON.stringify(agents, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'agents.json';
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('Data agent diekspor.');
+}
+
+function openAuditDialog() {
+  const rows = agents.map((agent) => `
+    <div class="detail-item">
+      <span>${escapeHTML(agent.id)} — ${escapeHTML(agent.name)}</span>
+      <strong>${escapeHTML(agent.status)} · Trust ${Number(agent.trust)}% · Sync ${escapeHTML(agent.lastSync || '—')}</strong>
+    </div>
+  `).join('');
+
+  $('#auditContent').innerHTML = agents.length
+    ? `<div class="detail-grid">${rows}</div>`
+    : '<p class="empty-row">Belum ada agent untuk diaudit.</p>';
+  $('#auditDialog').showModal();
+}
+
+function handleMenuAction(menu) {
+  setActiveMenu(menu);
+
+  if (menu === 'overview') {
+    selectedStatus = 'All';
+    $('#searchInput').value = '';
+    refreshDashboard();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else if (menu === 'agents') {
+    selectedStatus = 'All';
+    $('#searchInput').value = '';
+    refreshDashboard();
+    document.querySelector('.table-panel').scrollIntoView({ behavior: 'smooth' });
+  } else if (menu === 'alerts') {
+    selectedStatus = 'Alert';
+    $('#searchInput').value = '';
+    refreshDashboard();
+    document.querySelector('.table-panel').scrollIntoView({ behavior: 'smooth' });
+    showToast('Menampilkan agent berstatus Alert.');
+  } else if (menu === 'reports') {
+    exportAgents();
+  } else if (menu === 'audit') {
+    openAuditDialog();
+  }
+}
+
 async function initDashboard() {
   agents = await loadAgents();
   refreshDashboard();
@@ -348,16 +405,7 @@ async function init() {
 
   $('#searchInput').addEventListener('input', renderTable);
   $('#addAgentButton').addEventListener('click', () => openDialog());
-  $('#exportButton').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(agents, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'agents.json';
-    link.click();
-    URL.revokeObjectURL(url);
-    showToast('Data agent diekspor.');
-  });
+  $('#exportButton').addEventListener('click', exportAgents);
   $('#agentForm').addEventListener('submit', handleSubmit);
   $('#agentTableBody').addEventListener('click', handleTableAction);
   $('#closeDialogButton').addEventListener('click', () => $('#agentDialog').close());
@@ -369,6 +417,17 @@ async function init() {
   });
   $('#agentDetailDialog').addEventListener('click', (event) => {
     if (event.target === $('#agentDetailDialog')) $('#agentDetailDialog').close();
+  });
+  document.querySelectorAll('.nav a[data-menu]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      handleMenuAction(link.dataset.menu);
+    });
+  });
+  $('#closeAuditDialogButton').addEventListener('click', () => $('#auditDialog').close());
+  $('#auditCloseButton').addEventListener('click', () => $('#auditDialog').close());
+  $('#auditDialog').addEventListener('click', (event) => {
+    if (event.target === $('#auditDialog')) $('#auditDialog').close();
   });
 }
 
