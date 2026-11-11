@@ -7,6 +7,7 @@ const { URL } = require('url');
 const PORT = 3000;
 const DATA_FILE = path.join(__dirname, 'data', 'agents.json');
 const USERS_FILE = path.join(__dirname, 'data', 'users.json');
+const WATCHLIST_FILE = path.join(__dirname, 'data', 'watchlist.json');
 const sessions = new Map();
 
 const BNB_NETWORKS = {
@@ -69,6 +70,54 @@ function ensureSeedData() {
   ensureJsonFile(USERS_FILE, [
     { username: 'admin', password: 'admin123', role: 'admin' }
   ]);
+
+  ensureJsonFile(WATCHLIST_FILE, [
+    {
+      id: 'watch-01',
+      name: 'Astra Labs',
+      agentId: 'AG-2048',
+      category: 'Launch',
+      sourceType: 'website',
+      sourceUrl: 'https://example.com/astra',
+      status: 'Monitoring',
+      risk: 'Medium',
+      platform: 'BNB',
+      lastSeen: '2 hours ago',
+      tags: ['launch', 'agent', 'reward'],
+      notes: 'New public launch and wallet-linked campaign.',
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 'watch-02',
+      name: 'Miro Nexus',
+      agentId: 'AG-4401',
+      category: 'Campaign',
+      sourceType: 'x',
+      sourceUrl: 'https://x.com/miro',
+      status: 'Needs Review',
+      risk: 'High',
+      platform: 'BNB',
+      lastSeen: '5 hours ago',
+      tags: ['freemint', 'campaign'],
+      notes: 'Freemint claim social signal appears active.',
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 'watch-03',
+      name: 'VoltMind AI',
+      agentId: 'AG-9802',
+      category: 'Reward',
+      sourceType: 'docs',
+      sourceUrl: 'https://docs.example.com/voltmind',
+      status: 'Verified',
+      risk: 'Low',
+      platform: 'Ethereum',
+      lastSeen: '1 day ago',
+      tags: ['reward', 'claim'],
+      notes: 'Official docs list reward distribution pipeline.',
+      updatedAt: new Date().toISOString()
+    }
+  ]);
 }
 
 function readJson(filePath) {
@@ -86,6 +135,14 @@ function readAgents() {
 
 function writeAgents(data) {
   writeJson(DATA_FILE, data);
+}
+
+function readWatchlist() {
+  return readJson(WATCHLIST_FILE);
+}
+
+function writeWatchlist(data) {
+  writeJson(WATCHLIST_FILE, data);
 }
 
 function getUserFromDb(username, password) {
@@ -368,6 +425,89 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (parsedUrl.pathname === '/api/watchlist') {
+    const session = getSessionFromRequest(req);
+    if (!session) {
+      sendJson(res, 401, { message: 'Unauthorized' });
+      return;
+    }
+
+    if (req.method === 'GET') {
+      sendJson(res, 200, readWatchlist());
+      return;
+    }
+
+    if (req.method === 'POST') {
+      try {
+        const payload = await parseBody(req);
+        const list = readWatchlist();
+        const item = {
+          id: payload.id || `watch-${Date.now()}`,
+          name: payload.name || 'Unnamed Project',
+          agentId: payload.agentId || '',
+          category: payload.category || 'General',
+          sourceType: payload.sourceType || 'web',
+          sourceUrl: payload.sourceUrl || '',
+          status: payload.status || 'Monitoring',
+          risk: payload.risk || 'Medium',
+          platform: payload.platform || 'BNB',
+          lastSeen: payload.lastSeen || 'Recently',
+          tags: Array.isArray(payload.tags) ? payload.tags : [],
+          notes: payload.notes || '',
+          updatedAt: new Date().toISOString()
+        };
+        list.unshift(item);
+        writeWatchlist(list);
+        sendJson(res, 201, item);
+      } catch (error) {
+        sendJson(res, 400, { message: error.message || 'Invalid watchlist payload' });
+      }
+      return;
+    }
+
+    if (req.method === 'PUT') {
+      try {
+        const payload = await parseBody(req);
+        const list = readWatchlist();
+        const index = list.findIndex((item) => item.id === payload.id);
+        if (index === -1) {
+          sendJson(res, 404, { message: 'Watchlist item not found' });
+          return;
+        }
+
+        list[index] = {
+          ...list[index],
+          ...payload,
+          updatedAt: new Date().toISOString()
+        };
+        writeWatchlist(list);
+        sendJson(res, 200, list[index]);
+      } catch (error) {
+        sendJson(res, 400, { message: error.message || 'Invalid watchlist payload' });
+      }
+      return;
+    }
+
+    if (req.method === 'DELETE') {
+      const id = parsedUrl.searchParams.get('id');
+      if (!id) {
+        sendJson(res, 400, { message: 'Missing id' });
+        return;
+      }
+
+      const list = readWatchlist();
+      const filtered = list.filter((item) => item.id !== id);
+      if (filtered.length === list.length) {
+        sendJson(res, 404, { message: 'Watchlist item not found' });
+        return;
+      }
+
+      writeWatchlist(filtered);
+      sendJson(res, 200, { message: 'Watchlist item deleted successfully' });
+      return;
+    }
+  }
+
   if (parsedUrl.pathname === '/api/bnb/lookup') {
     const session = getSessionFromRequest(req);
     if (!session) {
@@ -441,6 +581,7 @@ server.listen(PORT, () => {
   console.log(`AgentRam API running at http://localhost:${PORT}`);
   console.log('Default login: admin / admin123');
   console.log('BNB Agent lookup: /api/bnb/lookup?agentId=123&network=bsc-mainnet');
+  console.log('Project watchlist: /api/watchlist');
 });
 
 module.exports = server;
