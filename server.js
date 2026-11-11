@@ -528,4 +528,4 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-module.exports = server;
+module.exports = (req, res) => server.emit('request', req, res);
