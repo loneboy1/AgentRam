@@ -395,6 +395,107 @@ function handleMenuAction(menu) {
   }
 }
 
+let bnbResults = [];
+
+function renderBnbResults(results) {
+  const container = $('#bnbLookupResults');
+
+  if (!results.length) {
+    container.innerHTML = '<p class="empty-row">Tidak ada agent yang cocok.</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Agent ID</th><th>Nama</th><th>Owner</th><th>Freemint</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          ${results.map((item, index) => `
+            <tr>
+              <td><strong>${item.agentId !== null && item.agentId !== undefined ? escapeHTML(String(item.agentId)) : '—'}</strong></td>
+              <td>${escapeHTML(item.name || '—')}</td>
+              <td>${escapeHTML(item.ownerAddress || '—')}</td>
+              <td>${item.freemintCandidate ? '<span class="badge green">Freemint</span>' : '<span class="badge blue">—</span>'}</td>
+              <td class="row-actions">
+                <button class="action-btn" type="button" data-bnb-index="${index}" ${item.agentId === null || item.agentId === undefined ? 'disabled' : ''}>+ Pantau</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function handleBnbLookup(event) {
+  event.preventDefault();
+  const agentId = $('#bnbAgentId').value.trim();
+  const wallet = $('#bnbWallet').value.trim();
+  const name = $('#bnbName').value.trim();
+  const network = $('#bnbNetwork').value;
+
+  if (!agentId && !wallet && !name) {
+    showToast('Isi salah satu: Agent ID, wallet, atau nama.');
+    return;
+  }
+
+  const button = $('#bnbLookupButton');
+  button.disabled = true;
+  button.textContent = 'Mencari...';
+  $('#bnbResultCount').textContent = 'Mencari...';
+  $('#bnbLookupResults').innerHTML = '<p class="empty-row">Mencari di indexer 8004scan...</p>';
+
+  try {
+    const params = new URLSearchParams();
+    if (agentId) params.set('agentId', agentId);
+    if (wallet) params.set('wallet', wallet);
+    if (name) params.set('name', name);
+    params.set('network', network);
+
+    const result = await apiRequest(`/bnb/lookup?${params.toString()}`);
+    bnbResults = Array.isArray(result?.results) ? result.results : [];
+    $('#bnbResultCount').textContent = `${result?.matched ?? bnbResults.length} hasil dari ${result?.total ?? bnbResults.length} agent`;
+    renderBnbResults(bnbResults);
+  } catch (error) {
+    bnbResults = [];
+    $('#bnbResultCount').textContent = 'Gagal';
+    $('#bnbLookupResults').innerHTML = '<p class="empty-row">Lookup gagal. Coba lagi nanti.</p>';
+    showToast(error.message || 'BNB lookup gagal.');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Cari Agent';
+  }
+}
+
+async function handleBnbAdd(event) {
+  const button = event.target.closest('button[data-bnb-index]');
+  if (!button) return;
+  const item = bnbResults[Number(button.dataset.bnbIndex)];
+  if (!item || item.agentId === null || item.agentId === undefined) return;
+
+  const agent = {
+    id: String(item.agentId),
+    name: item.name || `Agent ${item.agentId}`,
+    wallet: item.ownerAddress || '',
+    status: 'Pending',
+    risk: 'Low',
+    trust: 50,
+    lastSync: 'Baru saja',
+    notes: 'Dari BNB lookup'
+  };
+
+  try {
+    await apiRequest('/agents', 'POST', agent);
+    agents = await loadAgents();
+    refreshDashboard();
+    showToast(`Agent ${agent.id} ditambahkan ke pantauan.`);
+  } catch (error) {
+    showToast(error.message || 'Gagal menambahkan agent.');
+  }
+}
+
 async function initDashboard() {
   agents = await loadAgents();
   refreshDashboard();
@@ -418,6 +519,8 @@ async function init() {
   $('#agentDetailDialog').addEventListener('click', (event) => {
     if (event.target === $('#agentDetailDialog')) $('#agentDetailDialog').close();
   });
+  $('#bnbLookupForm').addEventListener('submit', handleBnbLookup);
+  $('#bnbLookupResults').addEventListener('click', handleBnbAdd);
   document.querySelectorAll('.nav a[data-menu]').forEach((link) => {
     link.addEventListener('click', (event) => {
       event.preventDefault();
