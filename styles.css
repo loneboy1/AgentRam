@@ -1,112 +1,201 @@
-* {
-  box-sizing: border-box;
-}
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AgentRam Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="loginScreen" class="auth-shell hidden">
+      <div class="auth-card">
+        <div class="auth-brand">
+          <div class="brand-mark">A</div>
+          <div>
+            <p class="eyebrow">Secure Access</p>
+            <h1>AgentRam</h1>
+          </div>
+        </div>
 
-:root {
-  --bg: #07111d;
-  --bg-soft: #0d1b2a;
-  --panel: #101f2f;
-  --line: rgba(148, 163, 184, 0.18);
-  --text: #edf5ff;
-  --muted: #a6b6cb;
-  --accent: #4cc9f0;
-  --green: #22c55e;
-  --yellow: #fbbf24;
-  --red: #f87171;
-  --blue: #60a5fa;
-  --shadow: 0 16px 32px rgba(2, 6, 23, 0.35);
-}
+        <form id="loginForm" class="auth-form">
+          <label>
+            <span>Username</span>
+            <input id="loginUsername" type="text" value="admin" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="loginPassword" type="password" value="admin123" required />
+          </label>
+          <p id="loginError" class="login-error" aria-live="polite"></p>
+          <button id="loginSubmit" type="submit" class="primary-btn full-width">Masuk</button>
+        </form>
+      </div>
+    </div>
 
-html, body { margin: 0; min-height: 100%; font-family: "Inter", sans-serif; background: radial-gradient(circle at top, #122540 0%, var(--bg) 32%, #040d18 100%); color: var(--text); }
-body { min-height: 100vh; }
-button, input, select, textarea { font: inherit; }
-button { cursor: pointer; }
-.app-shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
-.sidebar { background: rgba(8, 17, 29, .9); border-right: 1px solid var(--line); padding: 28px 18px; display: flex; flex-direction: column; gap: 22px; }
-.brand-wrap { display: flex; align-items: center; gap: 14px; padding: 6px 10px; }
-.brand-mark { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; font-weight: 800; background: linear-gradient(135deg, var(--accent), #7c4dff); color: #02131d; }
-.brand-wrap h1 { margin: 0; font-size: 1.2rem; }
-.eyebrow { margin: 0 0 7px; font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.nav { display: flex; flex-direction: column; gap: 8px; }
-.nav a { text-decoration: none; color: var(--muted); padding: 12px 14px; border-radius: 10px; transition: .2s ease; }
-.nav a.active, .nav a:hover { background: rgba(76, 201, 240, .12); color: var(--text); }
-.health-card { margin-top: auto; background: linear-gradient(180deg, rgba(124, 77, 255, .17), rgba(76, 201, 240, .1)); border: 1px solid var(--line); border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; gap: 8px; }
-.health-card h3 { margin: 0; font-size: 2rem; }
-.health-card span { color: var(--muted); font-size: .82rem; }
-.main-content { padding: 30px 28px 36px; }
-.topbar { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 26px; }
-.topbar h2, .panel-header h3, .table-header h3 { margin: 0; font-size: clamp(1.3rem, 2vw, 2rem); }
-.topbar-actions { display: flex; align-items: center; gap: 12px; }
-.primary-btn, .secondary-btn, .filter-chip, .action-btn, .icon-btn { border-radius: 12px; transition: .2s ease; }
-.primary-btn { border: 0; background: linear-gradient(135deg, var(--accent), #60a5fa); color: #041722; font-weight: 700; padding: 12px 18px; box-shadow: var(--shadow); }
-.secondary-btn { background: rgba(148, 163, 184, .09); color: var(--text); border: 1px solid var(--line); padding: 11px 16px; }
-.primary-btn:hover, .secondary-btn:hover, .action-btn:hover { filter: brightness(1.12); }
-.stats-grid { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 18px; margin-bottom: 24px; }
-.stat-card { background: rgba(16, 31, 47, .88); border: 1px solid var(--line); border-radius: 18px; padding: 18px; box-shadow: var(--shadow); }
-.stat-card .label { display: flex; justify-content: space-between; color: var(--muted); font-size: .8rem; }
-.stat-card .value { display: flex; justify-content: space-between; align-items: baseline; margin-top: 18px; }
-.stat-card strong { font-size: clamp(1.5rem, 2vw, 2.2rem); }
-.stat-card small { color: var(--green); font-weight: 700; }
-.wide-panel, .table-panel, .chart-card { background: rgba(16, 31, 47, .85); border: 1px solid var(--line); border-radius: 20px; padding: 20px 18px; box-shadow: var(--shadow); }
-.wide-panel { margin-bottom: 22px; }
-.panel-header, .table-header, .chart-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
-.search-box { width: min(360px, 100%); }
-.search-box input, .form-grid input, .form-grid select, .form-grid textarea { width: 100%; background: rgba(7, 17, 31, .9); border: 1px solid var(--line); border-radius: 10px; color: var(--text); padding: 12px 14px; outline: none; }
-.search-box input:focus, .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus { border-color: var(--accent); }
-.filter-row { display: flex; flex-wrap: wrap; gap: 10px; }
-.filter-chip { background: rgba(148, 163, 184, .08); color: var(--muted); border: 1px solid var(--line); padding: 8px 14px; }
-.filter-chip.active { background: rgba(76, 201, 240, .12); color: var(--text); border-color: rgba(76, 201, 240, .7); }
-.charts-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; margin-bottom: 22px; }
-.chart-card { min-height: 220px; }
-.bar-chart { display: flex; flex-direction: column; gap: 12px; }
-.chart-row { display: grid; grid-template-columns: 90px 1fr 32px; align-items: center; gap: 12px; }
-.chart-label { color: var(--muted); font-size: .82rem; }
-.bar-track { width: 100%; height: 14px; background: rgba(148, 163, 184, .12); border-radius: 999px; overflow: hidden; }
-.bar-fill { display: block; height: 100%; border-radius: inherit; }
-.bar-fill.green { background: linear-gradient(90deg, var(--green), #86efac); }
-.bar-fill.yellow { background: linear-gradient(90deg, var(--yellow), #fcd34d); }
-.bar-fill.red { background: linear-gradient(90deg, var(--red), #fca5a5); }
-.chart-value { color: var(--muted); text-align: right; font-size: .8rem; }
-.ring-wrap { display: grid; place-items: center; min-height: 150px; }
-.ring { --progress: 80; --ring-color: #22c55e; width: 130px; height: 130px; border-radius: 50%; background: conic-gradient(var(--ring-color) calc(var(--progress) * 1%), rgba(148, 163, 184, .12) 0); position: relative; display: grid; place-items: center; }
-.ring::before { content: ''; position: absolute; inset: 12px; border-radius: 50%; background: rgba(7, 17, 31, .92); }
-.ring-center { position: relative; z-index: 1; text-align: center; }
-.ring-center strong { font-size: 1.5rem; }
-.table-scroll { overflow-x: auto; }
-.table-panel { padding-bottom: 10px; }
-.result-badge { color: var(--muted); font-size: .82rem; }
-table { width: 100%; border-collapse: collapse; min-width: 1000px; }
-th, td { padding: 14px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
-th { color: var(--muted); font-size: .76rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; }
-tbody tr:hover { background: rgba(148, 163, 184, .04); }
-.badge { display: inline-flex; align-items: center; border-radius: 999px; font-size: .74rem; font-weight: 700; padding: 7px 10px; white-space: nowrap; }
-.badge.green { background: rgba(34, 197, 94, .12); color: #86efac; }
-.badge.yellow { background: rgba(251, 191, 36, .12); color: #fcd34d; }
-.badge.red { background: rgba(248, 113, 113, .12); color: #fca5a5; }
-.badge.blue { background: rgba(96, 165, 250, .12); color: #bfdbfe; }
-.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: currentColor; }
-.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.action-btn { background: rgba(76, 201, 240, .12); color: var(--text); padding: 7px 10px; border: 1px solid rgba(76, 201, 240, .3); white-space: nowrap; }
-.danger-btn { background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); color: #fca5a5; }
-.empty-row { color: var(--muted); text-align: center; padding: 26px; }
-.agent-dialog, .detail-dialog { width: min(620px, calc(100% - 28px)); max-height: min(90vh, 760px); overflow: auto; padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: #101f2f; color: var(--text); box-shadow: var(--shadow); }
-.agent-dialog::backdrop, .detail-dialog::backdrop { background: rgba(1, 7, 14, .75); backdrop-filter: blur(4px); }
-.dialog-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; }
-.dialog-header h2 { margin: 0; font-size: 1.4rem; }
-.icon-btn { width: 36px; height: 36px; border: 1px solid var(--line); background: transparent; color: var(--text); font-size: 1.5rem; line-height: 1; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.form-grid label { display: grid; gap: 8px; color: var(--muted); font-size: .85rem; }
-.form-grid select { color-scheme: dark; }
-.form-grid textarea { resize: vertical; }
-.full-width { grid-column: 1 / -1; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
-.detail-content { background: rgba(7, 17, 31, .4); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
-.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.detail-item { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(148, 163, 184, .03); }
-.detail-item span { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; }
-.detail-item strong { font-size: 1rem; line-height: 1.5; }
-.wide-item { grid-column: 1 / -1; }
-.toast { position: fixed; right: 24px; bottom: 24px; z-index: 5; margin: 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: #142a40; color: var(--text); opacity: 0; transform: translateY(10px); pointer-events: none; transition: .2s ease; }
-.toast.visible { opacity: 1; transform: translateY(0); }
-@media (max-width: 980px) { .app-shell { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--line); } .stats-grid, .charts-grid { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .main-content { padding: 20px 16px 28px; } .topbar, .panel-header, .table-header { flex-direction: column; align-items: flex-start; } .topbar-actions { width: 100%; } .stats-grid { grid-template-columns: 1fr; } .form-grid, .detail-grid { grid-template-columns: 1fr; } .full-width, .wide-item { grid-column: auto; } .toast { left: 16px; right: 16px; bottom: 16px; } }
+    <div id="app" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="brand-wrap">
+          <div class="brand-mark">A</div>
+          <div>
+            <p class="eyebrow">Monitoring</p>
+            <h1>AgentRam</h1>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <a class="active" href="#">Overview</a>
+          <a href="#">Agents</a>
+          <a href="#">Alerts</a>
+          <a href="#">Reports</a>
+          <a href="#">Audit</a>
+        </nav>
+
+        <div class="health-card">
+          <p class="eyebrow">Network Health</p>
+          <h3>96.4%</h3>
+          <span>Stable this hour</span>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Operations</p>
+            <h2>Freemint Agent Monitoring</h2>
+          </div>
+          <div class="topbar-actions">
+            <span class="user-pill">Hi, <strong id="usernameLabel">admin</strong></span>
+            <button class="secondary-btn" id="logoutButton" type="button">Logout</button>
+            <button class="secondary-btn" id="exportButton" type="button">Export JSON</button>
+            <button class="primary-btn" id="addAgentButton" type="button">+ Tambah Agent</button>
+          </div>
+        </header>
+
+        <section class="stats-grid" id="statsGrid"></section>
+
+        <section class="wide-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Quick Controls</p>
+              <h3>Agent Registry</h3>
+            </div>
+            <div class="search-box">
+              <input id="searchInput" type="search" placeholder="Cari ID, nama, wallet, notes..." aria-label="Cari agent" />
+            </div>
+          </div>
+          <div class="filter-row" id="statusFilters"></div>
+        </section>
+
+        <section class="charts-grid">
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Status Distribution</h3>
+            </div>
+            <div id="statusChart" class="bar-chart"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Trust Score</h3>
+            </div>
+            <div id="trustChart" class="ring-chart"></div>
+          </div>
+        </section>
+
+        <section class="table-panel">
+          <div class="table-header">
+            <div>
+              <p class="eyebrow">Live Data</p>
+              <h3>Daftar Pantauan</h3>
+            </div>
+            <span id="resultCount" class="result-badge">0 results</span>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent ID</th><th>Nama</th><th>Wallet</th><th>Status</th><th>Risk</th>
+                  <th>Trust</th><th>Last Sync</th><th>Notes</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="agentTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="agentDialog" class="agent-dialog" aria-labelledby="dialogTitle">
+      <form id="agentForm">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">Agent Registry</p>
+            <h2 id="dialogTitle">Tambah Agent</h2>
+          </div>
+          <button class="icon-btn" type="button" id="closeDialogButton" aria-label="Tutup">×</button>
+        </div>
+        <input id="originalId" type="hidden" />
+        <div class="form-grid">
+          <label>Agent ID<input id="agentId" name="id" required maxlength="40" placeholder="FA-1200" /></label>
+          <label>Nama<input id="agentName" name="name" required maxlength="100" placeholder="Nama agent" /></label>
+          <label>Wallet<input id="agentWallet" name="wallet" maxlength="120" placeholder="Alamat wallet" /></label>
+          <label>Status<select id="agentStatus" name="status"><option>Active</option><option>Pending</option><option>Alert</option></select></label>
+          <label>Risk<select id="agentRisk" name="risk"><option>Low</option><option>Medium</option><option>High</option></select></label>
+          <label>Trust (0–100)<input id="agentTrust" name="trust" type="number" min="0" max="100" value="80" required /></label>
+          <label>Last Sync<input id="agentLastSync" name="lastSync" maxlength="80" placeholder="Baru saja" /></label>
+          <label class="full-width">Notes<textarea id="agentNotes" name="notes" rows="3" maxlength="500" placeholder="Catatan pantauan"></textarea></label>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary-btn" type="button" id="cancelDialogButton">Batal</button>
+          <button class="primary-btn" type="submit">Simpan Agent</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="agentDetailDialog" class="detail-dialog" aria-labelledby="detailTitle">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Detail Agent</p>
+          <h2 id="detailTitle">Informasi Agent</h2>
+        </div>
+        <button class="icon-btn" type="button" id="closeDetailDialogButton" aria-label="Tutup detail">×</button>
+      </div>
+      <div id="detailContent" class="detail-content"></div>
+      <div class="dialog-actions">
+        <button class="primary-btn" type="button" id="detailCloseButton">Tutup</button>
+      </div>
+    </dialog>
+
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
+    <script src="app.js"></script>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
