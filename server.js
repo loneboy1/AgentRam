@@ -7,7 +7,7 @@ const { URL } = require('url');
 const PORT = 3000;
 const DATA_FILE = path.join(__dirname, 'data', 'agents.json');
 const USERS_FILE = path.join(__dirname, 'data', 'users.json');
-const sessions = new Map();
+sessions = new Map();
 
 function ensureJsonFile(filePath, defaultData) {
   const dir = path.dirname(filePath);
@@ -73,9 +73,38 @@ function writeAgents(data) {
   writeJson(DATA_FILE, data);
 }
 
+function readUsers() {
+  return readJson(USERS_FILE);
+}
+
+function writeUsers(data) {
+  writeJson(USERS_FILE, data);
+}
+
+function normalizeUsername(value) {
+  return String(value || '').trim();
+}
+
+function sanitizeRole(value) {
+  const role = String(value || 'user').trim().toLowerCase();
+  return ['admin', 'user'].includes(role) ? role : 'user';
+}
+
 function getUserFromDb(username, password) {
-  const users = readJson(USERS_FILE);
-  return users.find((user) => user.username === username && user.password === password) || null;
+  const users = readUsers();
+  const normalizedUsername = normalizeUsername(username);
+  const normalizedPassword = String(password || '').trim();
+
+  return users.find(
+    (user) => user.username === normalizedUsername && user.password === normalizedPassword
+  ) || null;
+}
+
+function getUserByUsername(username) {
+  const users = readUsers();
+  const normalizedUsername = normalizeUsername(username).toLowerCase();
+
+  return users.find((user) => user.username.toLowerCase() === normalizedUsername) || null;
 }
 
 function createSession(username) {
@@ -135,6 +164,55 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (parsedUrl.pathname === '/api/register') {
+    if (req.method !== 'POST') {
+      sendJson(res, 405, { message: 'Method not allowed' });
+      return;
+    }
+
+    try {
+      const body = await parseBody(req);
+      const username = normalizeUsername(body.username);
+      const password = String(body.password || '').trim();
+      const role = sanitizeRole(body.role);
+
+      if (!username || !password) {
+        sendJson(res, 400, { message: 'Username and password are required.' });
+        return;
+      }
+
+      if (username.length < 3) {
+        sendJson(res, 400, { message: 'Username must be at least 3 characters long.' });
+        return;
+      }
+
+      if (password.length < 4) {
+        sendJson(res, 400, { message: 'Password must be at least 4 characters long.' });
+        return;
+      }
+
+      const users = readUsers();
+      if (users.some((user) => user.username.toLowerCase() === username.toLowerCase())) {
+        sendJson(res, 409, { message: 'Username already exists.' });
+        return;
+      }
+
+      const newUser = { username, password, role };
+      users.push(newUser);
+      writeUsers(users);
+
+      const token = createSession(username);
+      sendJson(res, 201, {
+        token,
+        user: { username: newUser.username, role: newUser.role }
+      });
+      return;
+    } catch (error) {
+      sendJson(res, 400, { message: error.message || 'Invalid payload' });
+      return;
+    }
+  }
+
   if (parsedUrl.pathname === '/api/login') {
     if (req.method !== 'POST') {
       sendJson(res, 405, { message: 'Method not allowed' });
@@ -173,7 +251,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    sendJson(res, 200, { username: session.username, role: 'admin' });
+    const user = getUserByUsername(session.username);
+    if (!user) {
+      sendJson(res, 401, { message: 'Unauthorized' });
+      return;
+    }
+
+    sendJson(res, 200, { username: user.username, role: user.role });
     return;
   }
 
@@ -252,144 +336,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`AgentRam API running at http://localhost:${PORT}`);
   console.log('Default login: admin / admin123');
+  console.log('Register new users via POST /api/register');
 });
 
 module.exports = server;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
