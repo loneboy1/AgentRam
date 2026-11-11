@@ -3,10 +3,14 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
+require('dotenv').config();
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const DATA_FILE = path.join('/tmp', 'agents.json');
 const USERS_FILE = path.join('/tmp', 'users.json');
+const DEFAULT_USERNAME = process.env.APP_USERNAME || 'admin';
+const DEFAULT_PASSWORD = process.env.APP_PASSWORD || 'ChangeMeStrong!2026';
+
 const sessions = new Map();
 
 const BNB_NETWORKS = {
@@ -23,6 +27,10 @@ const BNB_NETWORKS = {
     scanApi: 'https://www.8004scan.io/api/v1'
   }
 };
+
+function hashValue(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
 
 function ensureJsonFile(filePath, defaultData) {
   const dir = path.dirname(filePath);
@@ -67,7 +75,11 @@ function ensureSeedData() {
   ]);
 
   ensureJsonFile(USERS_FILE, [
-    { username: process.env.ADMIN_USERNAME || 'admin', password: process.env.ADMIN_PASSWORD, role: 'admin' }
+    {
+      username: DEFAULT_USERNAME,
+      password: hashValue(DEFAULT_PASSWORD),
+      role: 'admin'
+    }
   ]);
 }
 
@@ -88,21 +100,72 @@ function writeAgents(data) {
   writeJson(DATA_FILE, data);
 }
 
+function sanitizeAgentPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Invalid agent payload');
+  }
+
+  const id = String(payload.id || '').trim();
+  const name = String(payload.name || '').trim();
+  const wallet = String(payload.wallet || '').trim();
+  const status = ['Active', 'Pending', 'Alert'].includes(payload.status) ? payload.status : 'Pending';
+  const risk = ['Low', 'Medium', 'High'].includes(payload.risk) ? payload.risk : 'Low';
+  const trustValue = Number(payload.trust);
+
+  if (!id || !name) {
+    throw new Error('Agent ID and name are required');
+  }
+
+  if (!Number.isInteger(trustValue) || trustValue < 0 || trustValue > 100) {
+    throw new Error('Trust must be an integer between 0 and 100');
+  }
+
+  return {
+    id,
+    name,
+    wallet,
+    status,
+    risk,
+    trust: trustValue,
+    lastSync: String(payload.lastSync || 'Baru saja').trim() || 'Baru saja',
+    notes: String(payload.notes || '').trim()
+  };
+}
+
 function getUserFromDb(username, password) {
   const users = readJson(USERS_FILE);
-  return users.find((user) => user.username === username && user.password === password) || null;
+  const user = users.find((entry) => entry.username === username);
+
+  if (!user) return null;
+
+  if (user.password === hashValue(password)) return user;
+  if (user.password === password) return user; // legacy compatibility
+
+  return null;
 }
 
 function createSession(username) {
   const token = crypto.randomBytes(24).toString('hex');
-  sessions.set(token, { username, createdAt: Date.now() });
+  sessions.set(token, {
+    username,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 1000 * 60 * 60 * 8
+  });
   return token;
 }
 
 function getSessionFromRequest(req) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  return sessions.get(token) || null;
+  const session = sessions.get(token);
+
+  if (!session) return null;
+  if (session.expiresAt < Date.now()) {
+    sessions.delete(token);
+    return null;
+  }
+
+  return session;
 }
 
 function sendJson(res, statusCode, data) {
@@ -118,9 +181,11 @@ function sendJson(res, statusCode, data) {
 function parseBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
+
     req.on('data', (chunk) => {
       body += chunk;
     });
+
     req.on('end', () => {
       if (!body) return resolve({});
       try {
@@ -265,16 +330,29 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = await parseBody(req);
-      const user = getUserFromDb(body.username || '', body.password || '');
+      const username = String(body.username || '').trim();
+      const password = String(body.password || '');
+
+      if (!username || !password) {
+        sendJson(res, 400, { message: 'Username dan password wajib diisi.' });
+        return;
+      }
+
+      const user = getUserFromDb(username, password);
+
       if (!user) {
         sendJson(res, 401, { message: 'Username atau password salah.' });
         return;
       }
 
       const token = createSession(user.username);
+
       sendJson(res, 200, {
         token,
-        user: { username: user.username, role: user.role }
+        user: {
+          username: user.username,
+          role: user.role
+        }
       });
       return;
     } catch (error) {
@@ -313,13 +391,15 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST') {
       try {
-        const payload = await parseBody(req);
+        const payload = sanitizeAgentPayload(await parseBody(req));
         const agents = readAgents();
         const existing = agents.find((agent) => agent.id === payload.id);
+
         if (existing) {
           sendJson(res, 409, { message: 'Agent ID already exists' });
           return;
         }
+
         agents.unshift(payload);
         writeAgents(agents);
         sendJson(res, 201, payload);
@@ -331,9 +411,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'PUT') {
       try {
-        const payload = await parseBody(req);
+        const payload = sanitizeAgentPayload(await parseBody(req));
         const agents = readAgents();
         const index = agents.findIndex((agent) => agent.id === payload.id);
+
         if (index === -1) {
           sendJson(res, 404, { message: 'Agent not found' });
           return;
@@ -349,7 +430,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'DELETE') {
-      const id = parsedUrl.searchParams.get('id');
+      const id = String(parsedUrl.searchParams.get('id') || '').trim();
       if (!id) {
         sendJson(res, 400, { message: 'Missing id' });
         return;
@@ -357,6 +438,7 @@ const server = http.createServer(async (req, res) => {
 
       const agents = readAgents();
       const filtered = agents.filter((agent) => agent.id !== id);
+
       if (filtered.length === agents.length) {
         sendJson(res, 404, { message: 'Agent not found' });
         return;
@@ -440,6 +522,9 @@ const server = http.createServer(async (req, res) => {
 if (process.env.NODE_ENV !== 'production') {
   server.listen(PORT, () => {
     console.log(`AgentRam API running at http://localhost:${PORT}`);
+    console.log(`Login username: ${DEFAULT_USERNAME}`);
+    console.log(`Password: ${DEFAULT_PASSWORD}`);
+    console.log('BNB Agent lookup: /api/bnb/lookup?agentId=123&network=bsc-mainnet');
   });
 }
 
