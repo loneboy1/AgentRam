@@ -10,32 +10,7 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div id="loginScreen" class="auth-shell hidden">
-      <div class="auth-card">
-        <div class="auth-brand">
-          <div class="brand-mark">A</div>
-          <div>
-            <p class="eyebrow">Secure Access</p>
-            <h1>AgentRam</h1>
-          </div>
-        </div>
-
-        <form id="loginForm" class="auth-form">
-          <label>
-            <span>Username</span>
-            <input id="loginUsername" type="text" required />
-          </label>
-          <label>
-            <span>Password</span>
-            <input id="loginPassword" type="password" required />
-          </label>
-          <p id="loginError" class="login-error" aria-live="polite"></p>
-          <button id="loginSubmit" type="submit" class="primary-btn full-width">Masuk</button>
-        </form>
-      </div>
-    </div>
-
-    <div id="app" class="app-shell hidden">
+    <div id="app" class="app-shell">
       <aside class="sidebar">
         <div class="brand-wrap">
           <div class="brand-mark">A</div>
@@ -70,7 +45,6 @@
           <div class="topbar-actions">
             <span class="user-pill">Hi, <strong id="usernameLabel">admin</strong></span>
             <a class="secondary-btn" href="watchlist.html" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">Daftar Pantauan</a>
-            <button class="secondary-btn" id="logoutButton" type="button">Logout</button>
             <button class="secondary-btn" id="exportButton" type="button">Export JSON</button>
             <button class="primary-btn" id="addAgentButton" type="button">+ Tambah Agent</button>
           </div>
