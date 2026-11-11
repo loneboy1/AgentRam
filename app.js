@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3000/api';
+const API_URL = '/api';
 const statusFilters = ['All', 'Active', 'Pending', 'Alert'];
 let agents = [];
 let selectedStatus = 'All';
