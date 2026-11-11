@@ -1,333 +1,64 @@
-* { box-sizing: border-box; }
-:root {
-  --bg: #07111d;
-  --bg-soft: #0d1b2a;
-  --panel: #101f2f;
-  --line: rgba(148, 163, 184, 0.18);
-  --text: #edf5ff;
-  --muted: #a6b6cb;
-  --accent: #4cc9f0;
-  --green: #22c55e;
-  --yellow: #fbbf24;
-  --red: #f87171;
-  --blue: #60a5fa;
-  --shadow: 0 16px 32px rgba(2, 6, 23, 0.35);
-}
-
-html, body {
-  margin: 0;
-  min-height: 100%;
-  font-family: 'Inter', sans-serif;
-  background: radial-gradient(circle at top, #122540 0%, var(--bg) 32%, #040d18 100%);
-  color: var(--text);
-}
-body {
-  min-height: 100vh;
-}
-button, input, select, textarea { font: inherit; }
-button { cursor: pointer; }
-input, select, textarea {
-  width: 100%;
-  background: rgba(7, 17, 31, 0.9);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  color: var(--text);
-  padding: 12px 14px;
-  outline: none;
-}
-input:focus, select:focus, textarea:focus { border-color: var(--accent); }
-.hidden { display: none !important; }
-.app-shell {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  min-height: 100vh;
-}
-.sidebar {
-  background: rgba(8, 17, 29, 0.9);
-  border-right: 1px solid var(--line);
-  padding: 28px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-.brand-wrap, .auth-brand {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 6px 10px;
-}
-.brand-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  background: linear-gradient(135deg, var(--accent), #7c4dff);
-  color: #02131d;
-}
-.brand-wrap h1, .auth-brand h1 { margin: 0; font-size: 1.2rem; }
-.eyebrow {
-  margin: 0 0 7px;
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.nav {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.nav a {
-  text-decoration: none;
-  color: var(--muted);
-  padding: 12px 14px;
-  border-radius: 10px;
-  transition: 0.2s ease;
-}
-.nav a.active, .nav a:hover { background: rgba(76, 201, 240, 0.12); color: var(--text); }
-.health-card {
-  margin-top: auto;
-  background: linear-gradient(180deg, rgba(124, 77, 255, 0.17), rgba(76, 201, 240, 0.1));
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 18px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.health-card h3 { margin: 0; font-size: 2rem; }
-.health-card span { color: var(--muted); font-size: 0.82rem; }
-.main-content { padding: 30px 28px 36px; }
-.topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 18px;
-  margin-bottom: 26px;
-}
-.topbar h2, .panel-header h3, .table-header h3, .chart-header h3 { margin: 0; font-size: clamp(1.3rem, 2vw, 2rem); }
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.user-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 12px;
-  border-radius: 999px;
-  background: rgba(76, 201, 240, 0.12);
-  border: 1px solid rgba(76, 201, 240, 0.22);
-  color: var(--muted);
-}
-.primary-btn, .secondary-btn, .filter-chip, .action-btn, .icon-btn {
-  border-radius: 12px;
-  transition: 0.2s ease;
-}
-.primary-btn {
-  border: 0;
-  background: linear-gradient(135deg, var(--accent), #60a5fa);
-  color: #041722;
-  font-weight: 700;
-  padding: 12px 18px;
-  box-shadow: var(--shadow);
-}
-.secondary-btn {
-  background: rgba(148, 163, 184, 0.09);
-  color: var(--text);
-  border: 1px solid var(--line);
-  padding: 11px 16px;
-}
-.primary-btn:hover, .secondary-btn:hover, .action-btn:hover { filter: brightness(1.12); }
-.full-width { width: 100%; }
-.auth-shell {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-}
-.auth-card {
-  width: min(420px, 100%);
-  background: rgba(16, 31, 47, 0.88);
-  border: 1px solid var(--line);
-  border-radius: 24px;
-  box-shadow: var(--shadow);
-  padding: 28px 22px;
-}
-.auth-form {
-  display: grid;
-  gap: 18px;
-  margin-top: 18px;
-}
-.auth-form label {
-  display: grid;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-.login-error {
-  min-height: 18px;
-  margin: 0;
-  color: #fca5a5;
-  font-size: 0.82rem;
-}
-.stats-grid { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 18px; margin-bottom: 24px; }
-.stat-card {
-  background: rgba(16, 31, 47, 0.88);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 18px;
-  box-shadow: var(--shadow);
-}
-.stat-card .label { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.8rem; }
-.stat-card .value { display: flex; justify-content: space-between; align-items: baseline; margin-top: 18px; }
-.stat-card strong { font-size: clamp(1.5rem, 2vw, 2.2rem); }
-.stat-card small { color: var(--green); font-weight: 700; }
-.wide-panel, .table-panel, .chart-card { background: rgba(16, 31, 47, 0.85); border: 1px solid var(--line); border-radius: 20px; padding: 20px 18px; box-shadow: var(--shadow); }
-.wide-panel { margin-bottom: 22px; }
-.panel-header, .table-header, .chart-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
-.search-box { width: min(360px, 100%); }
-.filter-row { display: flex; flex-wrap: wrap; gap: 10px; }
-.filter-chip { background: rgba(148, 163, 184, 0.08); color: var(--muted); border: 1px solid var(--line); padding: 8px 14px; }
-.filter-chip.active { background: rgba(76, 201, 240, 0.12); color: var(--text); border-color: rgba(76, 201, 240, 0.7); }
-.charts-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; margin-bottom: 22px; }
-.chart-card { min-height: 220px; }
-.bar-chart { display: flex; flex-direction: column; gap: 12px; }
-.chart-row { display: grid; grid-template-columns: 90px 1fr 32px; align-items: center; gap: 12px; }
-.chart-label { color: var(--muted); font-size: 0.82rem; }
-.bar-track { width: 100%; height: 14px; background: rgba(148, 163, 184, 0.12); border-radius: 999px; overflow: hidden; }
-.bar-fill { display: block; height: 100%; border-radius: inherit; }
-.bar-fill.green { background: linear-gradient(90deg, var(--green), #86efac); }
-.bar-fill.yellow { background: linear-gradient(90deg, var(--yellow), #fcd34d); }
-.bar-fill.red { background: linear-gradient(90deg, var(--red), #fca5a5); }
-.chart-value { color: var(--muted); text-align: right; font-size: 0.8rem; }
-.ring-wrap { display: grid; place-items: center; min-height: 150px; }
-.ring { --progress: 80; --ring-color: #22c55e; width: 130px; height: 130px; border-radius: 50%; background: conic-gradient(var(--ring-color) calc(var(--progress) * 1%), rgba(148, 163, 184, 0.12) 0); position: relative; display: grid; place-items: center; }
-.ring::before { content: ''; position: absolute; inset: 12px; border-radius: 50%; background: rgba(7, 17, 31, 0.92); }
-.ring-center { position: relative; z-index: 1; text-align: center; }
-.ring-center strong { font-size: 1.5rem; }
-.table-scroll { overflow-x: auto; }
-.table-panel { padding-bottom: 10px; }
-.result-badge { color: var(--muted); font-size: 0.82rem; }
-table { width: 100%; border-collapse: collapse; min-width: 1000px; }
-th, td { padding: 14px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
-th { color: var(--muted); font-size: 0.76rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; }
-tbody tr:hover { background: rgba(148, 163, 184, 0.04); }
-.badge { display: inline-flex; align-items: center; border-radius: 999px; font-size: 0.74rem; font-weight: 700; padding: 7px 10px; white-space: nowrap; }
-.badge.green { background: rgba(34, 197, 94, 0.12); color: #86efac; }
-.badge.yellow { background: rgba(251, 191, 36, 0.12); color: #fcd34d; }
-.badge.red { background: rgba(248, 113, 113, 0.12); color: #fca5a5; }
-.badge.blue { background: rgba(96, 165, 250, 0.12); color: #bfdbfe; }
-.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: currentColor; }
-.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.action-btn { background: rgba(76, 201, 240, 0.12); color: var(--text); padding: 7px 10px; border: 1px solid rgba(76, 201, 240, 0.3); white-space: nowrap; }
-.danger-btn { background: rgba(248, 113, 113, 0.1); border-color: rgba(248, 113, 113, 0.3); color: #fca5a5; }
-.empty-row { color: var(--muted); text-align: center; padding: 26px; }
-.agent-dialog, .detail-dialog { width: min(620px, calc(100% - 28px)); max-height: min(90vh, 760px); overflow: auto; padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: #101f2f; color: var(--text); box-shadow: var(--shadow); }
-.agent-dialog::backdrop, .detail-dialog::backdrop { background: rgba(1, 7, 14, 0.75); backdrop-filter: blur(4px); }
-.dialog-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; }
-.dialog-header h2 { margin: 0; font-size: 1.4rem; }
-.icon-btn { width: 36px; height: 36px; border: 1px solid var(--line); background: transparent; color: var(--text); font-size: 1.5rem; line-height: 1; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.form-grid label { display: grid; gap: 8px; color: var(--muted); font-size: 0.85rem; }
-.form-grid select { color-scheme: dark; }
-.form-grid textarea { resize: vertical; }
-.full-width-form { grid-column: 1 / -1; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
-.detail-content { background: rgba(7, 17, 31, 0.4); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
-.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.detail-item { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(148, 163, 184, 0.03); }
-.detail-item span { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
-.detail-item strong { font-size: 1rem; line-height: 1.5; }
-.wide-item { grid-column: 1 / -1; }
-.toast { position: fixed; right: 24px; bottom: 24px; z-index: 5; margin: 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: #142a40; color: var(--text); opacity: 0; transform: translateY(10px); pointer-events: none; transition: 0.2s ease; }
-.toast.visible { opacity: 1; transform: translateY(0); }
-@media (max-width: 980px) {
-  .app-shell { grid-template-columns: 1fr; }
-  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
-  .stats-grid, .charts-grid { grid-template-columns: 1fr; }
-}
-@media (max-width: 620px) {
-  .main-content { padding: 20px 16px 28px; }
-  .topbar, .panel-header, .table-header { flex-direction: column; align-items: flex-start; }
-  .topbar-actions { width: 100%; }
-  .stats-grid { grid-template-columns: 1fr; }
-  .form-grid, .detail-grid { grid-template-columns: 1fr; }
-  .full-width-form, .wide-item { grid-column: auto; }
-  .auth-card { padding: 22px 18px; }
-  .toast { left: 16px; right: 16px; bottom: 16px; }
-}
+# AgentRam
 
+AgentRam is a lightweight BNB Chain / Agent ID monitoring dashboard and source directory. It combines a local dashboard for tracking agent records with a searchable watchlist of public discovery sources for Agent ID-related mint campaigns.
 
+> **Status:** Community monitoring and research project. Source listings are discovery leads, not endorsements, investment advice, or proof that a campaign is current, safe, or free.
 
+## Pages
 
+- [`index.html`](index.html) — dashboard UI for agent records, status/risk/trust summaries, search, and the BNB Agent lookup panel.
+- [`watchlist.html`](watchlist.html) — searchable source directory with category and manual-check filters. Manual check state is stored in the browser's local storage.
+- [`about.html`](about.html) — project scope, workflow, and safety notes.
 
+The watchlist includes Agent ID catalogs, mint calendars, community feeds, search links, blockchain explorers, research tools, and example campaign/project repositories. Unknown or unstable links (such as the specific trycloudflare Agent Radar URL and canonical Boltbook URL) are identified as search placeholders rather than official links.
 
+## Features
 
+- Agent registry dashboard with add, edit, delete, search, and JSON export.
+- Status, risk, and trust summaries for tracked agent records.
+- BNB ERC-8004 lookup panel, backed by the local API and 8004scan indexer.
+- Searchable source directory with category filters and locally saved manual review status.
+- Direct links to discovery and verification resources, including Agent ID Hub, BscScan, BNB Chain explorers, calendars, and social/search feeds.
 
+## Run locally
 
+Requirements: Node.js with built-in `fetch` support (Node 18 or newer recommended).
 
+```bash
+npm start
+```
 
+The API listens at `http://localhost:3000`. Open `index.html` from a local static server or configure the frontend API URL for your environment. The frontend currently uses `http://localhost:3000/api` in `app.js`; a deployed frontend will not be able to use a visitor's localhost as its backend.
 
+The API creates local JSON data files under `data/` as needed. Its current seed configuration includes a demo `admin` account with password `admin123`. **Change/remove the demo credentials and add proper authentication and deployment security before exposing the API to a network.** Do not treat this sample local API as production-ready.
 
+## GitHub Pages
 
+GitHub Pages can serve the static HTML pages, but it does not run the Node API. Therefore the dashboard's API-dependent features (login, saved agent records, BNB lookup) require a separately hosted backend and a configured frontend API URL. The static watchlist and About page work without the API. To enable Pages, configure the repository under **Settings → Pages** and choose a supported publishing source/workflow.
 
+## Reviewing a source or campaign
 
+1. Treat a calendar, social post, catalog, or repository as a lead—not as authoritative proof.
+2. Follow the project link to its official channel and confirm the campaign is still active.
+3. Independently inspect the contract, network, mint/claim price, eligibility, supply, and transaction behavior using a trusted explorer.
+4. Remember that a “free” mint may still require network gas, and pages can be stale or malicious.
+5. Never share seed phrases, private keys, passwords, or wallet credentials with a website or agent.
 
+AgentRam does not automatically monitor every external site, validate campaign claims, or execute mint transactions.
 
+## Repository map
 
+```text
+.
+├── about.html       # Project overview and safety notes
+├── app.js           # Dashboard frontend behavior
+├── index.html       # Dashboard page
+├── server.js        # Local Node API
+├── styles.css       # Dashboard styles
+├── watchlist.html   # Searchable source directory
+└── data/            # Local API data (created/used at runtime)
+```
 
+## Disclaimer
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+This project is for monitoring and research. External sources and project links are community-supplied or publicly discovered and may be inaccurate, unsafe, or outdated. Verify independently. Nothing in this repository is financial advice or a guarantee of safety or returns.
