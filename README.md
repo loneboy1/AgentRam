@@ -28,9 +28,10 @@ Requirements: Node.js with built-in `fetch` support (Node 18 or newer recommende
 npm start
 ```
 
-The API listens at `http://localhost:3000`. Open `index.html` from a local static server or configure the frontend API URL for your environment. The frontend currently uses `http://localhost:3000/api` in `app.js`; a deployed frontend will not be able to use a visitor's localhost as its backend.
+The API listens at `/api`. Open `index.html` from a local static server or configure the frontend API URL for your environment. The frontend currently uses `/api` in `app.js`; a deployed frontend will not be able to use a visitor's localhost as its backend.
 
-The API creates local JSON data files under `data/` as needed. Its current seed configuration includes a demo `admin` account with password `admin123`. **Change/remove the demo credentials and add proper authentication and deployment security before exposing the API to a network.** Do not treat this sample local API as production-ready.
+The API creates local JSON data files under `data/` as needed. The API uses environment variables (ADMIN_USERNAME and ADMIN_PASSWORD) for secure authentication.
+
 
 ## GitHub Pages
 
