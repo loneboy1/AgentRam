@@ -3,19 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Freemint Agent Monitor</title>
+    <title>AgentRam Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="page-shell">
+    <div class="app-shell">
       <aside class="sidebar">
-        <div class="brand">
+        <div class="brand-wrap">
           <div class="brand-mark">A</div>
           <div>
-            <p class="eyebrow">System</p>
+            <p class="eyebrow">Monitoring</p>
             <h1>AgentRam</h1>
           </div>
         </div>
@@ -25,46 +25,49 @@
           <a href="#">Agents</a>
           <a href="#">Alerts</a>
           <a href="#">Reports</a>
-          <a href="#">Settings</a>
+          <a href="#">Audit</a>
         </nav>
 
-        <div class="mini-card">
+        <div class="health-card">
           <p class="eyebrow">Network Health</p>
-          <strong>96.4%</strong>
+          <h3>96.4%</h3>
           <span>Stable this hour</span>
         </div>
       </aside>
 
-      <main class="content">
+      <main class="main-content">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Monitoring Dashboard</p>
-            <h2>Freemint Agent ID Pantauan</h2>
+            <p class="eyebrow">Operations</p>
+            <h2>Freemint Agent Monitoring</h2>
           </div>
-          <button class="primary-btn">Export Report</button>
+          <div class="topbar-actions">
+            <button class="secondary-btn">Export</button>
+            <button class="primary-btn">Add Agent</button>
+          </div>
         </header>
 
         <section class="stats-grid" id="statsGrid"></section>
 
-        <section class="panel controls-panel">
-          <div class="controls-head">
+        <section class="wide-panel">
+          <div class="panel-header">
             <div>
-              <p class="eyebrow">Filter</p>
-              <h3>Daftar Pantauan</h3>
+              <p class="eyebrow">Quick Controls</p>
+              <h3>Agent Registry</h3>
             </div>
-            <div class="search-wrap">
-              <input id="searchInput" type="text" placeholder="Cari agent ID, nama, wallet..." />
+            <div class="search-box">
+              <input id="searchInput" type="text" placeholder="Cari ID, nama, wallet, notes..." />
             </div>
           </div>
 
           <div class="filter-row" id="statusFilters"></div>
         </section>
 
-        <section class="panel table-panel">
+        <section class="table-panel">
           <div class="table-header">
             <div>
               <p class="eyebrow">Live Data</p>
-              <h3>Agent Registry</h3>
+              <h3>Daftar Pantauan</h3>
             </div>
             <span id="resultCount" class="result-badge">0 results</span>
           </div>
@@ -78,8 +81,10 @@
                   <th>Wallet</th>
                   <th>Status</th>
                   <th>Risk</th>
+                  <th>Trust</th>
                   <th>Last Sync</th>
                   <th>Notes</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody id="agentTableBody"></tbody>

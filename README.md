@@ -1,25 +1,29 @@
 # AgentRam
 
-Proyek starter untuk dashboard pantauan daftar Freemint Agent ID secara lengkap.
+Dashboard pantauan untuk Freemint Agent ID dengan fitur monitoring, filter, pencarian cepat, dan ringkasan operasional.
 
 ## Fitur
-- Ringkasan status harian
-- Pencarian dan filter agent
-- Status aktif / pending / alert
-- Tabel pantauan lengkap
-- Tampilan responsif untuk desktop dan mobile
+- Ringkasan statistik harian
+- Pencarian agent berdasarkan ID, nama, wallet, atau notes
+- Filter status: All, Active, Pending, Alert
+- Tabel pantauan per agent lengkap
+- Data dummy siap dikembangkan ke backend / API
+- Desain responsif untuk desktop dan mobile
 
-## Cara menjalankan
-1. Buka file `index.html` di browser, atau
-2. Jalankan server lokal misalnya:
+## Struktur project
+- `index.html` — layout dashboard
+- `styles.css` — styling dashboard
+- `app.js` — data dan interaksi UI
+
+## Jalankan
+Buka file `index.html` langsung di browser, atau jalankan server lokal:
 
 ```bash
 python -m http.server 8000
 ```
 
-Lalu buka http://localhost:8000
+Lalu buka:
 
-## Struktur project
-- `index.html` — layout dashboard
-- `styles.css` — styling
-- `app.js` — data dan interaksi
+```text
+http://localhost:8000
+```
