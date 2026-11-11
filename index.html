@@ -1,541 +1,176 @@
-const API_URL = 'http://localhost:3000/api';
-const statusFilters = ['All', 'Active', 'Pending', 'Alert'];
-let agents = [];
-let selectedStatus = 'All';
-let toastTimer;
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AgentRam Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="loginScreen" class="auth-shell hidden">
+      <div class="auth-card">
+        <div class="auth-brand">
+          <div class="brand-mark">A</div>
+          <div>
+            <p class="eyebrow">Secure Access</p>
+            <h1>AgentRam</h1>
+          </div>
+        </div>
 
-const $ = (selector) => document.querySelector(selector);
-
-function escapeHTML(value = '') {
-  return String(value).replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  })[character]);
-}
-
-function validAgent(agent) {
-  return agent && typeof agent.id === 'string' && typeof agent.name === 'string' &&
-    ['Active', 'Pending', 'Alert'].includes(agent.status) &&
-    ['Low', 'Medium', 'High'].includes(agent.risk) &&
-    Number.isInteger(Number(agent.trust)) && Number(agent.trust) >= 0 && Number(agent.trust) <= 100;
-}
-
-function getAuthHeaders() {
-  const token = localStorage.getItem('agentram_token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
-  };
-}
-
-async function apiRequest(path, method = 'GET', payload) {
-  const response = await fetch(`${API_URL}${path}`, {
-    method,
-    headers: getAuthHeaders(),
-    ...(payload !== undefined ? { body: JSON.stringify(payload) } : {})
-  });
-
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
-
-  if (!response.ok) {
-    throw new Error(data?.message || 'Request failed');
-  }
-
-  return data;
-}
-
-async function loadMe() {
-  try {
-    const data = await apiRequest('/me');
-    return data;
-  } catch (error) {
-    logout();
-    return null;
-  }
-}
-
-async function loadAgents() {
-  try {
-    const data = await apiRequest('/agents');
-    if (Array.isArray(data) && data.every(validAgent)) {
-      return data;
-    }
-  } catch (error) {
-    console.warn('API load failed:', error.message);
-  }
-
-  return [];
-}
-
-function logout() {
-  localStorage.removeItem('agentram_token');
-  window.location.reload();
-}
-
-function showToast(message) {
-  const toast = $('#toast');
-  if (!toast) return;
-  toast.textContent = message;
-  toast.classList.add('visible');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('visible'), 3000);
-}
-
-function statusBadgeClass(status) {
-  return status === 'Active' ? 'green' : status === 'Pending' ? 'yellow' : 'red';
-}
-
-function riskBadgeClass(risk) {
-  return risk === 'Low' ? 'green' : risk === 'Medium' ? 'yellow' : 'red';
-}
-
-function renderStats() {
-  const stats = [
-    { label: 'Total Agent', value: agents.length },
-    { label: 'Active', value: agents.filter((agent) => agent.status === 'Active').length },
-    { label: 'Pending', value: agents.filter((agent) => agent.status === 'Pending').length },
-    { label: 'Alert', value: agents.filter((agent) => agent.status === 'Alert').length }
-  ];
-
-  $('#statsGrid').innerHTML = stats.map((stat) => `
-    <div class="stat-card">
-      <div class="label"><span>${stat.label}</span><span>◈</span></div>
-      <div class="value"><strong>${stat.value}</strong><small>agents</small></div>
-    </div>
-  `).join('');
-}
-
-function renderStatusChart() {
-  const statusCounts = ['Active', 'Pending', 'Alert'].map((status) => ({
-    status,
-    count: agents.filter((agent) => agent.status === status).length
-  }));
-
-  const max = Math.max(...statusCounts.map((item) => item.count), 1);
-  const bars = statusCounts.map(({ status, count }) => `
-    <div class="chart-row">
-      <div class="chart-label">${status}</div>
-      <div class="bar-track">
-        <div class="bar-fill ${statusBadgeClass(status)}" style="width: ${(count / max) * 100}%"></div>
-      </div>
-      <div class="chart-value">${count}</div>
-    </div>
-  `).join('');
-
-  $('#statusChart').innerHTML = bars;
-}
-
-function renderTrustChart() {
-  const total = agents.length || 1;
-  const averageTrust = Math.round(
-    agents.reduce((sum, agent) => sum + Number(agent.trust || 0), 0) / total
-  );
-
-  $('#trustChart').innerHTML = `
-    <div class="ring-wrap">
-      <div class="ring" style="--progress:${averageTrust}; --ring-color:${averageTrust >= 80 ? '#22c55e' : averageTrust >= 60 ? '#fbbf24' : '#f87171'};">
-        <div class="ring-center"><strong>${averageTrust}%</strong></div>
+        <form id="loginForm" class="auth-form">
+          <label>
+            <span>Username</span>
+            <input id="loginUsername" type="text" value="admin" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="loginPassword" type="password" value="admin123" required />
+          </label>
+          <p id="loginError" class="login-error" aria-live="polite"></p>
+          <button id="loginSubmit" type="submit" class="primary-btn full-width">Masuk</button>
+        </form>
       </div>
     </div>
-  `;
-}
 
-function renderFilters() {
-  const container = $('#statusFilters');
-  container.innerHTML = statusFilters.map((status) => `
-    <button class="filter-chip ${selectedStatus === status ? 'active' : ''}" type="button" data-status="${status}">${status}</button>
-  `).join('');
+    <div id="app" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="brand-wrap">
+          <div class="brand-mark">A</div>
+          <div>
+            <p class="eyebrow">Monitoring</p>
+            <h1>AgentRam</h1>
+          </div>
+        </div>
 
-  container.querySelectorAll('.filter-chip').forEach((button) => {
-    button.addEventListener('click', () => {
-      selectedStatus = button.dataset.status;
-      renderFilters();
-      renderTable();
-    });
-  });
-}
+        <nav class="nav">
+          <a class="active" href="#">Overview</a>
+          <a href="#">Agents</a>
+          <a href="#">Alerts</a>
+          <a href="watchlist.html">Daftar Pantauan</a>
+          <a href="#">Reports</a>
+          <a href="#">Audit</a>
+        </nav>
 
-function renderTable() {
-  const searchValue = $('#searchInput').value.trim().toLowerCase();
-  const filteredAgents = agents.filter((agent) => {
-    const matchesStatus = selectedStatus === 'All' || agent.status === selectedStatus;
-    const searchable = [agent.id, agent.name, agent.wallet, agent.notes, agent.status, agent.risk].join(' ').toLowerCase();
-    return matchesStatus && (!searchValue || searchable.includes(searchValue));
-  });
+        <div class="health-card">
+          <p class="eyebrow">Network Health</p>
+          <h3>96.4%</h3>
+          <span>Stable this hour</span>
+        </div>
+      </aside>
 
-  $('#resultCount').textContent = `${filteredAgents.length} hasil`;
-  const body = $('#agentTableBody');
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Operations</p>
+            <h2>Freemint Agent Monitoring</h2>
+          </div>
+          <div class="topbar-actions">
+            <span class="user-pill">Hi, <strong id="usernameLabel">admin</strong></span>
+            <a class="secondary-btn" href="watchlist.html" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">Daftar Pantauan</a>
+            <button class="secondary-btn" id="logoutButton" type="button">Logout</button>
+            <button class="secondary-btn" id="exportButton" type="button">Export JSON</button>
+            <button class="primary-btn" id="addAgentButton" type="button">+ Tambah Agent</button>
+          </div>
+        </header>
 
-  if (!filteredAgents.length) {
-    body.innerHTML = '<tr><td colspan="9" class="empty-row">Tidak ada agent yang cocok.</td></tr>';
-    return;
-  }
+        <section class="stats-grid" id="statsGrid"></section>
 
-  body.innerHTML = filteredAgents.map((agent) => `
-    <tr>
-      <td><strong>${escapeHTML(agent.id)}</strong></td>
-      <td>${escapeHTML(agent.name)}</td>
-      <td>${escapeHTML(agent.wallet || '—')}</td>
-      <td><span class="badge ${statusBadgeClass(agent.status)}"><span class="status-dot"></span>${escapeHTML(agent.status)}</span></td>
-      <td><span class="badge ${riskBadgeClass(agent.risk)}">${escapeHTML(agent.risk)}</span></td>
-      <td><span class="badge ${Number(agent.trust) >= 85 ? 'green' : Number(agent.trust) >= 70 ? 'yellow' : 'blue'}">${Number(agent.trust)}%</span></td>
-      <td>${escapeHTML(agent.lastSync || '—')}</td>
-      <td>${escapeHTML(agent.notes || '—')}</td>
-      <td class="row-actions">
-        <button class="action-btn" type="button" data-action="view" data-id="${escapeHTML(agent.id)}">View</button>
-        <button class="action-btn" type="button" data-action="edit" data-id="${escapeHTML(agent.id)}">Edit</button>
-        <button class="action-btn danger-btn" type="button" data-action="delete" data-id="${escapeHTML(agent.id)}">Hapus</button>
-      </td>
-    </tr>
-  `).join('');
-}
+        <section class="wide-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Quick Controls</p>
+              <h3>Agent Registry</h3>
+            </div>
+            <div class="search-box">
+              <input id="searchInput" type="search" placeholder="Cari ID, nama, wallet, notes..." aria-label="Cari agent" />
+            </div>
+          </div>
+          <div class="filter-row" id="statusFilters"></div>
+        </section>
 
-function refreshDashboard() {
-  renderStats();
-  renderStatusChart();
-  renderTrustChart();
-  renderFilters();
-  renderTable();
-}
+        <section class="charts-grid">
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Status Distribution</h3>
+            </div>
+            <div id="statusChart" class="bar-chart"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Trust Score</h3>
+            </div>
+            <div id="trustChart" class="ring-chart"></div>
+          </div>
+        </section>
 
-function openDialog(agent) {
-  const form = $('#agentForm');
-  form.reset();
-  $('#originalId').value = agent?.id || '';
-  $('#dialogTitle').textContent = agent ? 'Edit Agent' : 'Tambah Agent';
-  $('#agentId').value = agent?.id || '';
-  $('#agentId').readOnly = Boolean(agent);
-  $('#agentName').value = agent?.name || '';
-  $('#agentWallet').value = agent?.wallet || '';
-  $('#agentStatus').value = agent?.status || 'Active';
-  $('#agentRisk').value = agent?.risk || 'Low';
-  $('#agentTrust').value = agent?.trust ?? 80;
-  $('#agentLastSync').value = agent?.lastSync || '';
-  $('#agentNotes').value = agent?.notes || '';
-  $('#agentDialog').showModal();
-  $('#agentId').focus();
-}
-
-function openDetailModal(agent) {
-  $('#detailContent').innerHTML = `
-    <div class="detail-grid">
-      <div class="detail-item">
-        <span>Agent ID</span>
-        <strong>${escapeHTML(agent.id)}</strong>
-      </div>
-      <div class="detail-item">
-        <span>Nama</span>
-        <strong>${escapeHTML(agent.name)}</strong>
-      </div>
-      <div class="detail-item">
-        <span>Wallet</span>
-        <strong>${escapeHTML(agent.wallet || '—')}</strong>
-      </div>
-      <div class="detail-item">
-        <span>Status</span>
-        <strong><span class="badge ${statusBadgeClass(agent.status)}"><span class="status-dot"></span>${escapeHTML(agent.status)}</span></strong>
-      </div>
-      <div class="detail-item">
-        <span>Risk</span>
-        <strong><span class="badge ${riskBadgeClass(agent.risk)}">${escapeHTML(agent.risk)}</span></strong>
-      </div>
-      <div class="detail-item">
-        <span>Trust</span>
-        <strong>${Number(agent.trust)}%</strong>
-      </div>
-      <div class="detail-item">
-        <span>Last Sync</span>
-        <strong>${escapeHTML(agent.lastSync || '—')}</strong>
-      </div>
-      <div class="detail-item wide-item">
-        <span>Notes</span>
-        <strong>${escapeHTML(agent.notes || '—')}</strong>
-      </div>
+        <section class="table-panel">
+          <div class="table-header">
+            <div>
+              <p class="eyebrow">Live Data</p>
+              <h3>Daftar Pantauan</h3>
+            </div>
+            <span id="resultCount" class="result-badge">0 results</span>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent ID</th><th>Nama</th><th>Wallet</th><th>Status</th><th>Risk</th>
+                  <th>Trust</th><th>Last Sync</th><th>Notes</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="agentTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
     </div>
-  `;
-  $('#agentDetailDialog').showModal();
-}
 
-async function handleSubmit(event) {
-  event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const originalId = $('#originalId').value;
-  const id = formData.get('id').trim();
-  const duplicate = agents.some((agent) => agent.id.toLowerCase() === id.toLowerCase() && agent.id !== originalId);
+    <dialog id="agentDialog" class="agent-dialog" aria-labelledby="dialogTitle">
+      <form id="agentForm">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">Agent Registry</p>
+            <h2 id="dialogTitle">Tambah Agent</h2>
+          </div>
+          <button class="icon-btn" type="button" id="closeDialogButton" aria-label="Tutup">×</button>
+        </div>
+        <input id="originalId" type="hidden" />
+        <div class="form-grid">
+          <label>Agent ID<input id="agentId" name="id" required maxlength="40" placeholder="FA-1200" /></label>
+          <label>Nama<input id="agentName" name="name" required maxlength="100" placeholder="Nama agent" /></label>
+          <label>Wallet<input id="agentWallet" name="wallet" maxlength="120" placeholder="Alamat wallet" /></label>
+          <label>Status<select id="agentStatus" name="status"><option>Active</option><option>Pending</option><option>Alert</option></select></label>
+          <label>Risk<select id="agentRisk" name="risk"><option>Low</option><option>Medium</option><option>High</option></select></label>
+          <label>Trust (0–100)<input id="agentTrust" name="trust" type="number" min="0" max="100" value="80" required /></label>
+          <label>Last Sync<input id="agentLastSync" name="lastSync" maxlength="80" placeholder="Baru saja" /></label>
+          <label class="full-width">Notes<textarea id="agentNotes" name="notes" rows="3" maxlength="500" placeholder="Catatan pantauan"></textarea></label>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary-btn" type="button" id="cancelDialogButton">Batal</button>
+          <button class="primary-btn" type="submit">Simpan Agent</button>
+        </div>
+      </form>
+    </dialog>
 
-  if (duplicate) {
-    $('#agentId').setCustomValidity('Agent ID sudah digunakan.');
-    $('#agentId').reportValidity();
-    $('#agentId').setCustomValidity('');
-    return;
-  }
-
-  const agent = {
-    id,
-    name: formData.get('name').trim(),
-    wallet: formData.get('wallet').trim(),
-    status: formData.get('status'),
-    risk: formData.get('risk'),
-    trust: Number(formData.get('trust')),
-    lastSync: formData.get('lastSync').trim() || 'Baru saja',
-    notes: formData.get('notes').trim()
-  };
-
-  try {
-    if (originalId) {
-      await apiRequest('/agents', 'PUT', agent);
-      showToast('Data agent berhasil diperbarui.');
-    } else {
-      await apiRequest('/agents', 'POST', agent);
-      showToast('Agent berhasil ditambahkan.');
-    }
-
-    agents = await loadAgents();
-    refreshDashboard();
-    $('#agentDialog').close();
-  } catch (error) {
-    showToast(error.message || 'Gagal menyimpan agent.');
-  }
-}
-
-async function handleTableAction(event) {
-  const button = event.target.closest('button[data-action]');
-  if (!button) return;
-  const agent = agents.find((item) => item.id === button.dataset.id);
-  if (!agent) return;
-
-  if (button.dataset.action === 'view') {
-    openDetailModal(agent);
-  } else if (button.dataset.action === 'edit') {
-    openDialog(agent);
-  } else if (button.dataset.action === 'delete' && confirm(`Hapus agent ${agent.id}?`)) {
-    try {
-      await apiRequest(`/agents?id=${encodeURIComponent(agent.id)}`, 'DELETE');
-      agents = await loadAgents();
-      refreshDashboard();
-      showToast('Agent berhasil dihapus.');
-    } catch (error) {
-      showToast(error.message || 'Gagal menghapus agent.');
-    }
-  }
-}
-
-async function handleLogin(event) {
-  event.preventDefault();
-  const username = $('#loginUsername').value.trim();
-  const password = $('#loginPassword').value;
-  const submitButton = $('#loginSubmit');
-
-  submitButton.disabled = true;
-  submitButton.textContent = 'Masuk...';
-
-  try {
-    const data = await fetch(`${API_URL}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    }).then(async (response) => {
-      const text = await response.text();
-      const json = text ? JSON.parse(text) : null;
-      if (!response.ok) throw new Error(json?.message || 'Login gagal');
-      return json;
-    });
-
-    localStorage.setItem('agentram_token', data.token);
-    $('#loginForm').reset();
-    initDashboard();
-  } catch (error) {
-    $('#loginError').textContent = error.message || 'Login gagal';
-  } finally {
-    submitButton.disabled = false;
-    submitButton.textContent = 'Masuk';
-  }
-}
-
-function renderLogin() {
-  $('#app').classList.add('hidden');
-  $('#loginScreen').classList.remove('hidden');
-}
-
-function renderDashboard() {
-  $('#loginScreen').classList.add('hidden');
-  $('#app').classList.remove('hidden');
-}
-
-function ensureBnbLookupPanel() {
-  const mount = $('#bnbLookupMount');
-  if (mount) return;
-
-  const container = document.createElement('div');
-  container.id = 'bnbLookupMount';
-  container.className = 'wide-panel';
-  container.innerHTML = `
-    <div class="panel-header">
-      <h3>BNB Agent / Freemint Lookup</h3>
-      <span class="result-badge">ERC-8004 registry</span>
-    </div>
-    <div class="form-grid">
-      <label>
-        Agent ID
-        <input id="bnbAgentId" type="text" placeholder="contoh: 123" />
-      </label>
-      <label>
-        Wallet Address
-        <input id="bnbWallet" type="text" placeholder="0x..." />
-      </label>
-      <label class="full-width-form">
-        Agent Name
-        <input id="bnbName" type="text" placeholder="contoh: my-agent" />
-      </label>
-      <label>
-        Network
-        <select id="bnbNetwork">
-          <option value="bsc-mainnet">BSC Mainnet</option>
-          <option value="bsc-testnet">BSC Testnet</option>
-        </select>
-      </label>
+    <dialog id="agentDetailDialog" class="detail-dialog" aria-labelledby="detailTitle">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Detail Agent</p>
+          <h2 id="detailTitle">Informasi Agent</h2>
+        </div>
+        <button class="icon-btn" type="button" id="closeDetailDialogButton" aria-label="Tutup detail">×</button>
+      </div>
+      <div id="detailContent" class="detail-content"></div>
       <div class="dialog-actions">
-        <button class="secondary-btn" type="button" id="bnbClearButton">Reset</button>
-        <button class="primary-btn" type="button" id="bnbSearchButton">Cari</button>
+        <button class="primary-btn" type="button" id="detailCloseButton">Tutup</button>
       </div>
-    </div>
-    <div id="bnbLookupResult" class="detail-content" style="margin-top: 18px; min-height: 100px;">
-      <div class="result-badge">Belum ada pencarian.</div>
-    </div>
-  `;
+    </dialog>
 
-  const target = $('#statsGrid');
-  if (target && target.parentNode) {
-    target.parentNode.insertBefore(container, target.nextSibling);
-  } else {
-    const app = $('#app');
-    if (app) app.appendChild(container);
-  }
-
-  $('#bnbClearButton').addEventListener('click', () => {
-    $('#bnbAgentId').value = '';
-    $('#bnbWallet').value = '';
-    $('#bnbName').value = '';
-    $('#bnbNetwork').value = 'bsc-mainnet';
-    $('#bnbLookupResult').innerHTML = '<div class="result-badge">Belum ada pencarian.</div>';
-  });
-
-  $('#bnbSearchButton').addEventListener('click', runBnbLookup);
-}
-
-async function runBnbLookup() {
-  const resultBox = $('#bnbLookupResult');
-  if (!resultBox) return;
-
-  const params = {
-    agentId: $('#bnbAgentId').value.trim() || undefined,
-    wallet: $('#bnbWallet').value.trim() || undefined,
-    name: $('#bnbName').value.trim() || undefined,
-    network: $('#bnbNetwork').value || 'bsc-mainnet'
-  };
-
-  if (!params.agentId && !params.wallet && !params.name) {
-    resultBox.innerHTML = '<div class="result-badge">Isi minimal satu filter: Agent ID, wallet, atau name.</div>';
-    return;
-  }
-
-  resultBox.innerHTML = '<div class="result-badge">Mencari data BNB Agent...</div>';
-
-  try {
-    const data = await apiRequest('/bnb/lookup', 'GET', undefined + '');
-    const fallback = await fetch(`${API_URL}/bnb/lookup?${new URLSearchParams({
-      ...(params.agentId ? { agentId: params.agentId } : {}),
-      ...(params.wallet ? { wallet: params.wallet } : {}),
-      ...(params.name ? { name: params.name } : {}),
-      network: params.network
-    })}`, {
-      headers: getAuthHeaders()
-    });
-
-    const json = await fallback.json();
-    if (!fallback.ok) throw new Error(json?.message || 'BNB lookup gagal');
-
-    const rows = (json.results || []).map((item) => `
-      <div class="detail-item wide-item">
-        <span>Agent ${item.agentId ?? '—'}</span>
-        <strong>${escapeHTML(item.name || 'Unnamed')} • ${escapeHTML(item.ownerAddress || '—')} • ${item.freemintCandidate ? 'Freemint candidate' : 'Regular agent'}</strong>
-      </div>
-    `).join('');
-
-    resultBox.innerHTML = `
-      <div class="detail-grid">
-        <div class="detail-item">
-          <span>Network</span>
-          <strong>${escapeHTML(json.network)}</strong>
-        </div>
-        <div class="detail-item">
-          <span>Registry</span>
-          <strong>${escapeHTML(json.registryContract || '—')}</strong>
-        </div>
-        <div class="detail-item">
-          <span>Matched</span>
-          <strong>${json.matched ?? 0}</strong>
-        </div>
-        <div class="detail-item">
-          <span>Source</span>
-          <strong>${escapeHTML(json.source || '—')}</strong>
-        </div>
-        ${rows || '<div class="detail-item wide-item"><span>Hasil</span><strong>Tidak ada agent yang cocok.</strong></div>'}
-      </div>
-    `;
-  } catch (error) {
-    resultBox.innerHTML = `<div class="result-badge">${escapeHTML(error.message || 'Gagal mencari data BNB Agent.')}</div>`;
-  }
-}
-
-async function initDashboard() {
-  const user = await loadMe();
-  if (!user) {
-    renderLogin();
-    return;
-  }
-
-  renderDashboard();
-  $('#usernameLabel').textContent = user.username;
-  agents = await loadAgents();
-  refreshDashboard();
-  ensureBnbLookupPanel();
-}
-
-async function init() {
-  const token = localStorage.getItem('agentram_token');
-  if (!token) {
-    renderLogin();
-  } else {
-    await initDashboard();
-  }
-
-  $('#loginForm').addEventListener('submit', handleLogin);
-  $('#logoutButton').addEventListener('click', logout);
-  $('#searchInput').addEventListener('input', renderTable);
-  $('#addAgentButton').addEventListener('click', () => openDialog());
-  $('#exportButton').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(agents, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'agents.json';
-    link.click();
-    URL.revokeObjectURL(url);
-    showToast('Data agent diekspor.');
-  });
-  $('#agentForm').addEventListener('submit', handleSubmit);
-  $('#agentTableBody').addEventListener('click', handleTableAction);
-  $('#closeDialogButton').addEventListener('click', () => $('#agentDialog').close());
-  $('#cancelDialogButton').addEventListener('click', () => $('#agentDialog').close());
-  $('#closeDetailDialogButton').addEventListener('click', () => $('#agentDetailDialog').close());
-  $('#detailCloseButton').addEventListener('click', () => $('#agentDetailDialog').close());
-  $('#agentDialog').addEventListener('click', (event) => {
-    if (event.target === $('#agentDialog')) $('#agentDialog').close();
-  });
-  $('#agentDetailDialog').addEventListener('click', (event) => {
-    if (event.target === $('#agentDetailDialog')) $('#agentDetailDialog').close();
-  });
-}
-
-init();
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
+    <script src="app.js"></script>
+  </body>
+</html>
