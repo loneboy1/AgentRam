@@ -80,6 +80,19 @@ async function loadWatchlist() {
   }
 }
 
+async function refreshWatchlistSources() {
+  try {
+    const result = await apiRequest('/watchlist/sync');
+    showToast(`Sync selesai: ${result.synced}/${result.total} item berhasil diperbarui.`);
+    watchlist = await loadWatchlist();
+    renderWatchlistTable();
+    return result;
+  } catch (error) {
+    showToast(error.message || 'Gagal sync watchlist.');
+    return null;
+  }
+}
+
 function logout() {
   localStorage.removeItem('agentram_token');
   window.location.reload();
@@ -111,6 +124,13 @@ function watchlistStatusBadgeClass(status) {
 
 function watchlistRiskBadgeClass(risk) {
   return risk === 'Low' ? 'green' : risk === 'Medium' ? 'yellow' : 'red';
+}
+
+function getScoreTone(score = 0) {
+  if (score >= 80) return 'green';
+  if (score >= 60) return 'yellow';
+  if (score >= 40) return 'blue';
+  return 'red';
 }
 
 function renderStats() {
@@ -230,7 +250,8 @@ function renderWatchlistTable() {
       item.sourceType,
       item.sourceUrl,
       item.tags ? item.tags.join(' ') : '',
-      item.notes
+      item.notes,
+      (item.sourceMeta && (item.sourceMeta.title || item.sourceMeta.description)) || ''
     ].join(' ').toLowerCase();
     return matchesStatus && (!query || haystack.includes(query));
   });
@@ -242,27 +263,38 @@ function renderWatchlistTable() {
   if (!body) return;
 
   if (!filtered.length) {
-    body.innerHTML = '<tr><td colspan="9" class="empty-row">Tidak ada proyek yang cocok.</td></tr>';
+    body.innerHTML = '<tr><td colspan="10" class="empty-row">Tidak ada proyek yang cocok.</td></tr>';
     return;
   }
 
-  body.innerHTML = filtered.map((item) => `
-    <tr>
-      <td><strong>${escapeHTML(item.name || 'Unnamed')}</strong></td>
-      <td>${escapeHTML(item.agentId || '—')}</td>
-      <td><span class="badge ${watchlistStatusBadgeClass(item.status)}">${escapeHTML(item.status || 'Monitoring')}</span></td>
-      <td>${escapeHTML(item.category || 'General')}</td>
-      <td>${escapeHTML(item.platform || '—')}</td>
-      <td><a href="${escapeHTML(item.sourceUrl || '#')}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.sourceType || 'web')}</a></td>
-      <td><span class="badge ${watchlistRiskBadgeClass(item.risk || 'Medium')}">${escapeHTML(item.risk || 'Medium')}</span></td>
-      <td>${escapeHTML(item.lastSeen || 'Recently')}</td>
-      <td>${escapeHTML((item.tags || []).join(', ') || '—')}</td>
-      <td class="row-actions">
-        <button class="action-btn" type="button" data-watchlist-action="edit" data-id="${escapeHTML(item.id)}">Edit</button>
-        <button class="action-btn danger-btn" type="button" data-watchlist-action="delete" data-id="${escapeHTML(item.id)}">Delete</button>
-      </td>
-    </tr>
-  `).join('');
+  body.innerHTML = filtered.map((item) => {
+    const score = Number(item.score || 0);
+    const scoreTone = getScoreTone(score);
+    const alertLabel = score >= 80 ? 'Strong signal' : score >= 60 ? 'Watching' : score >= 40 ? 'Review' : 'Low';
+
+    return `
+      <tr>
+        <td><strong>${escapeHTML(item.name || 'Unnamed')}</strong></td>
+        <td>${escapeHTML(item.agentId || '—')}</td>
+        <td><span class="badge ${watchlistStatusBadgeClass(item.status || 'Monitoring')}">${escapeHTML(item.status || 'Monitoring')}</span></td>
+        <td>${escapeHTML(item.category || 'General')}</td>
+        <td>${escapeHTML(item.platform || '—')}</td>
+        <td><a href="${escapeHTML(item.sourceUrl || '#')}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.sourceType || 'web')}</a></td>
+        <td><span class="badge ${watchlistRiskBadgeClass(item.risk || 'Medium')}">${escapeHTML(item.risk || 'Medium')}</span></td>
+        <td>${escapeHTML(item.lastSeen || 'Recently')}</td>
+        <td>${escapeHTML((item.tags || []).join(', ') || '—')}</td>
+        <td>
+          <div class="score-pill ${scoreTone}">${score}</div>
+          <div class="muted-mini">${alertLabel}</div>
+        </td>
+        <td class="row-actions">
+          <button class="action-btn" type="button" data-watchlist-action="view" data-id="${escapeHTML(item.id)}">View</button>
+          <button class="action-btn" type="button" data-watchlist-action="edit" data-id="${escapeHTML(item.id)}">Edit</button>
+          <button class="action-btn danger-btn" type="button" data-watchlist-action="delete" data-id="${escapeHTML(item.id)}">Delete</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function refreshDashboard() {
@@ -330,6 +362,68 @@ function openDetailModal(agent) {
     </div>
   `;
   $('#agentDetailDialog').showModal();
+}
+
+function openWatchlistDetailModal(item) {
+  const content = $( '#watchlistDetailContent' );
+  if (!content) return;
+
+  const sourceMeta = item.sourceMeta || {};
+  content.innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-item">
+        <span>Project</span>
+        <strong>${escapeHTML(item.name || '—')}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Agent ID</span>
+        <strong>${escapeHTML(item.agentId || '—')}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Category</span>
+        <strong>${escapeHTML(item.category || 'General')}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Platform</span>
+        <strong>${escapeHTML(item.platform || '—')}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Status</span>
+        <strong><span class="badge ${watchlistStatusBadgeClass(item.status || 'Monitoring')}">${escapeHTML(item.status || 'Monitoring')}</span></strong>
+      </div>
+      <div class="detail-item">
+        <span>Risk</span>
+        <strong><span class="badge ${watchlistRiskBadgeClass(item.risk || 'Medium')}">${escapeHTML(item.risk || 'Medium')}</span></strong>
+      </div>
+      <div class="detail-item">
+        <span>Score</span>
+        <strong>${Number(item.score || 0)}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Last Seen</span>
+        <strong>${escapeHTML(item.lastSeen || 'Recently')}</strong>
+      </div>
+      <div class="detail-item wide-item">
+        <span>Source</span>
+        <strong><a href="${escapeHTML(item.sourceUrl || '#')}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.sourceUrl || '—')}</a></strong>
+      </div>
+      <div class="detail-item wide-item">
+        <span>Source Summary</span>
+        <strong>${escapeHTML(sourceMeta.title || item.name || '—')}<br>${escapeHTML(sourceMeta.description || item.notes || '—')}</strong>
+      </div>
+      <div class="detail-item wide-item">
+        <span>Notes</span>
+        <strong>${escapeHTML(item.notes || '—')}</strong>
+      </div>
+      <div class="detail-item wide-item">
+        <span>Tags</span>
+        <strong>${escapeHTML((item.tags || []).join(', ') || '—')}</strong>
+      </div>
+    </div>
+  `;
+
+  const dialog = $('#watchlistDetailDialog');
+  if (dialog) dialog.showModal();
 }
 
 async function handleSubmit(event) {
@@ -404,8 +498,14 @@ function ensureWatchlistPanel() {
   panel.className = 'wide-panel';
   panel.innerHTML = `
     <div class="panel-header">
-      <h3>Project Watchlist</h3>
-      <button class="primary-btn" type="button" id="watchlistAddButton">Add Project</button>
+      <div>
+        <p class="eyebrow">Intelligence</p>
+        <h3>Project Watchlist</h3>
+      </div>
+      <div class="topbar-actions">
+        <button class="secondary-btn" type="button" id="watchlistSyncButton">Sync Sources</button>
+        <button class="primary-btn" type="button" id="watchlistAddButton">Add Project</button>
+      </div>
     </div>
     <div class="panel-header" style="margin-top: 12px; margin-bottom: 14px;">
       <div class="search-box">
@@ -427,6 +527,7 @@ function ensureWatchlistPanel() {
             <th>Risk</th>
             <th>Last Seen</th>
             <th>Tags</th>
+            <th>Score</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -440,23 +541,10 @@ function ensureWatchlistPanel() {
     target.parentNode.insertBefore(panel, target.nextSibling);
   }
 
-  const filters = $('#watchlistFilters');
-  if (filters) {
-    filters.innerHTML = watchlistStatusFilters.map((status) => `
-      <button class="filter-chip ${selectedWatchlistStatus === status ? 'active' : ''}" type="button" data-watchlist-status="${status}">${status}</button>
-    `).join('');
-
-    filters.querySelectorAll('[data-watchlist-status]').forEach((button) => {
-      button.addEventListener('click', () => {
-        selectedWatchlistStatus = button.dataset.watchlistStatus;
-        renderWatchlistFilters();
-        renderWatchlistTable();
-      });
-    });
-  }
-
+  renderWatchlistFilters();
   $('#watchlistSearch').addEventListener('input', renderWatchlistTable);
   $('#watchlistAddButton').addEventListener('click', () => openWatchlistModal());
+  $('#watchlistSyncButton').addEventListener('click', refreshWatchlistSources);
 }
 
 function renderWatchlistFilters() {
@@ -594,7 +682,6 @@ function openWatchlistModal(item = null) {
 
 async function handleWatchlistSubmit(event) {
   event.preventDefault();
-  const form = event.currentTarget;
   const payload = {
     id: $('#watchlistId').value || `watch-${Date.now()}`,
     name: $('#watchlistName').value.trim(),
@@ -640,6 +727,11 @@ async function handleWatchlistTableAction(event) {
   const id = button.dataset.id;
   const item = watchlist.find((entry) => entry.id === id);
   if (!item) return;
+
+  if (button.dataset.watchlistAction === 'view') {
+    openWatchlistDetailModal(item);
+    return;
+  }
 
   if (button.dataset.watchlistAction === 'edit') {
     openWatchlistModal(item);
@@ -825,6 +917,34 @@ async function runBnbLookup() {
   }
 }
 
+function ensureWatchlistDetailDialog() {
+  if ($('#watchlistDetailDialog')) return;
+
+  const dialog = document.createElement('dialog');
+  dialog.id = 'watchlistDetailDialog';
+  dialog.className = 'detail-dialog';
+  dialog.innerHTML = `
+    <div class="dialog-header">
+      <div>
+        <p class="eyebrow">Project Detail</p>
+        <h2 id="watchlistDetailTitle">Project Summary</h2>
+      </div>
+      <button class="icon-btn" type="button" id="watchlistDetailCloseButton" aria-label="Tutup detail">×</button>
+    </div>
+    <div id="watchlistDetailContent" class="detail-content"></div>
+    <div class="dialog-actions">
+      <button class="primary-btn" type="button" id="watchlistDetailCloseFooterButton">Tutup</button>
+    </div>
+  `;
+
+  document.body.appendChild(dialog);
+  $('#watchlistDetailCloseButton').addEventListener('click', () => dialog.close());
+  $('#watchlistDetailCloseFooterButton').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+}
+
 async function initDashboard() {
   const user = await loadMe();
   if (!user) {
@@ -839,6 +959,7 @@ async function initDashboard() {
   refreshDashboard();
   ensureBnbLookupPanel();
   ensureWatchlistPanel();
+  ensureWatchlistDetailDialog();
   renderWatchlistTable();
 }
 
