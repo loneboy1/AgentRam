@@ -5,6 +5,7 @@ const bnbFilters = [
   { value: 'freemint', label: 'Freemint only' },
   { value: 'regular', label: 'Regular only' }
 ];
+
 let agents = [];
 let selectedStatus = 'All';
 let selectedBnbFilter = 'all';
@@ -495,7 +496,7 @@ function ensureBnbLookupPanel() {
 
   $('#bnbFilterScope').addEventListener('change', (event) => {
     selectedBnbFilter = event.target.value;
-    if ($('#bnbLookupResult').textContent.trim() && $('#bnbLookupResult').textContent.includes('Belum ada pencarian') === false) {
+    if ($('#bnbLookupResult').textContent.trim() && !$('#bnbLookupResult').textContent.includes('Belum ada pencarian')) {
       runBnbLookup();
     }
   });
@@ -637,4 +638,3 @@ async function init() {
 }
 
 init();
-"path":"server.js"}],
