@@ -71,6 +71,41 @@ function renderStats() {
   `).join('');
 }
 
+function renderStatusChart() {
+  const statusCounts = ['Active', 'Pending', 'Alert'].map((status) => ({
+    status,
+    count: agents.filter((agent) => agent.status === status).length
+  }));
+
+  const max = Math.max(...statusCounts.map((item) => item.count), 1);
+  const bars = statusCounts.map(({ status, count }) => `
+    <div class="chart-row">
+      <div class="chart-label">${status}</div>
+      <div class="bar-track">
+        <div class="bar-fill ${statusBadgeClass(status)}" style="width: ${(count / max) * 100}%"></div>
+      </div>
+      <div class="chart-value">${count}</div>
+    </div>
+  `).join('');
+
+  $('#statusChart').innerHTML = bars;
+}
+
+function renderTrustChart() {
+  const total = agents.length || 1;
+  const averageTrust = Math.round(
+    agents.reduce((sum, agent) => sum + Number(agent.trust || 0), 0) / total
+  );
+
+  $('#trustChart').innerHTML = `
+    <div class="ring-wrap">
+      <div class="ring" style="--progress:${averageTrust}; --ring-color:${averageTrust >= 80 ? '#22c55e' : averageTrust >= 60 ? '#fbbf24' : '#f87171'};">
+        <div class="ring-center"><strong>${averageTrust}%</strong></div>
+      </div>
+    </div>
+  `;
+}
+
 function renderFilters() {
   const container = $('#statusFilters');
   container.innerHTML = statusFilters.map((status) => `
@@ -121,6 +156,8 @@ function renderTable() {
 
 function refreshDashboard() {
   renderStats();
+  renderStatusChart();
+  renderTrustChart();
   renderFilters();
   renderTable();
 }
