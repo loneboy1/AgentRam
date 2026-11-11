@@ -5,8 +5,8 @@ const crypto = require('crypto');
 const { URL } = require('url');
 
 const PORT = 3000;
-const DATA_FILE = path.join(__dirname, 'data', 'agents.json');
-const USERS_FILE = path.join(__dirname, 'data', 'users.json');
+const DATA_FILE = path.join('/tmp', 'agents.json');
+const USERS_FILE = path.join('/tmp', 'users.json');
 const sessions = new Map();
 
 const BNB_NETWORKS = {
