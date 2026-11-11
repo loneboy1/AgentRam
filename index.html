@@ -80,6 +80,28 @@
           </div>
         </section>
 
+        <section class="wide-panel" id="bnbLookupPanel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">BNB Chain · ERC-8004</p>
+              <h3>BNB Agent Lookup</h3>
+            </div>
+            <span id="bnbResultCount" class="result-badge">Belum ada pencarian</span>
+          </div>
+          <form id="bnbLookupForm">
+            <div class="form-grid">
+              <label>Agent ID<input id="bnbAgentId" type="text" inputmode="numeric" placeholder="cth: 123" /></label>
+              <label>Wallet<input id="bnbWallet" type="text" placeholder="0x..." /></label>
+              <label>Nama<input id="bnbName" type="text" placeholder="Nama agent" /></label>
+              <label>Network<select id="bnbNetwork"><option value="bsc-mainnet">BSC Mainnet</option><option value="bsc-testnet">BSC Testnet</option></select></label>
+            </div>
+            <div class="dialog-actions">
+              <button class="primary-btn" type="submit" id="bnbLookupButton">Cari Agent</button>
+            </div>
+          </form>
+          <div id="bnbLookupResults" class="detail-content"></div>
+        </section>
+
         <section class="table-panel">
           <div class="table-header">
             <div>
