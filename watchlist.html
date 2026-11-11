@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Direktori sumber Daftar Pantauan AgentRam untuk memantau agent dan peluang mint." />
+  <title>Daftar Pantauan Sumber — AgentRam</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07111d;--panel:#101f2f;--line:rgba(148,163,184,.18);--text:#edf5ff;--muted:#a6b6cb;--accent:#4cc9f0;--green:#22c55e;--yellow:#fbbf24}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#122540 0%,var(--bg) 42%,#040d18 100%);color:var(--text);font:16px/1.5 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    a{color:inherit}.shell{width:min(1180px,calc(100% - 36px));margin:0 auto;padding:32px 0 56px}.top{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:28px}.brand{display:flex;align-items:center;gap:12px}.mark{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-weight:800;background:linear-gradient(135deg,var(--accent),#7c4dff);color:#02131d}.eyebrow{margin:0 0 5px;color:var(--muted);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase}.brand h1,.hero h2{margin:0}.top a,.source-link{color:#8fe5fa;text-decoration:none}.top a:hover,.source-link:hover{text-decoration:underline}.hero{margin:36px 0 24px}.hero h2{font-size:clamp(1.8rem,4vw,2.7rem);line-height:1.15}.hero p:last-child{max-width:760px;color:var(--muted)}
+    .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:22px 0}.stat,.toolbar,.source-card{background:rgba(16,31,47,.88);border:1px solid var(--line);border-radius:16px}.stat{padding:16px}.stat span{display:block;color:var(--muted);font-size:.82rem}.stat strong{font-size:1.55rem}.toolbar{padding:18px;margin-bottom:18px}.controls{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:12px;align-items:center}.search,.select{background:rgba(7,17,31,.9);border:1px solid var(--line);border-radius:11px;color:var(--text);padding:11px 13px;font:inherit}.filters{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.chip,.check-btn{border:1px solid var(--line);border-radius:999px;background:rgba(148,163,184,.08);color:var(--muted);padding:8px 12px;font:inherit;cursor:pointer}.chip.active{color:var(--text);border-color:rgba(76,201,240,.7);background:rgba(76,201,240,.14)}.list-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:22px 2px 12px;color:var(--muted);font-size:.9rem}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.source-card{padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.source-card h3{margin:0;font-size:1.08rem}.category{display:inline-flex;border:1px solid rgba(76,201,240,.25);background:rgba(76,201,240,.09);color:#bceefa;border-radius:999px;padding:4px 9px;font-size:.73rem;white-space:nowrap}.description{margin:0;color:var(--muted);font-size:.9rem}.source-link{overflow-wrap:anywhere;font-size:.9rem}.placeholder{color:#fcd34d}.card-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:10px;border-top:1px solid var(--line)}.check-state{font-size:.8rem;color:var(--muted)}.check-state.done{color:#86efac}.check-btn{border-radius:10px;color:var(--text);padding:8px 11px}.check-btn:hover{border-color:var(--accent)}.empty{grid-column:1/-1;text-align:center;padding:32px;color:var(--muted);border:1px dashed var(--line);border-radius:16px}.note{margin-top:22px;padding:14px 16px;border:1px solid rgba(251,191,36,.25);border-radius:12px;background:rgba(251,191,36,.06);color:#f6dfa0;font-size:.86rem}.back{display:inline-block;margin-top:24px;color:var(--muted)}
+    @media(max-width:720px){.shell{width:min(100% - 24px,600px);padding-top:20px}.top{align-items:flex-start;flex-direction:column}.controls{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.stats{gap:8px}.stat{padding:12px}.stat strong{font-size:1.25rem}.card-head{flex-direction:column}.list-head{align-items:flex-start;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top">
+      <div class="brand"><div class="mark" aria-hidden="true">A</div><div><p class="eyebrow">AgentRam · Direktori Sumber</p><h1>Daftar Pantauan</h1></div></div>
+      <a href="index.html">← Kembali ke dashboard</a>
+    </header>
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">Source directory</p>
+      <h2 id="page-title">Semua sumber pantauan, di satu tempat.</h2>
+      <p>Cari sumber, saring berdasarkan kategori, lalu tandai pemeriksaan secara manual. Status pemeriksaan disimpan di browser ini dan tidak berarti sumber sudah diverifikasi otomatis.</p>
+    </section>
+    <section class="stats" aria-label="Ringkasan sumber">
+      <div class="stat"><span>Total sumber</span><strong id="totalCount">0</strong></div>
+      <div class="stat"><span>Sudah diperiksa</span><strong id="checkedCount">0</strong></div>
+      <div class="stat"><span>Perlu pemeriksaan</span><strong id="pendingCount">0</strong></div>
+    </section>
+    <section class="toolbar" aria-label="Pencarian dan filter sumber">
+      <div class="controls">
+        <input id="search" class="search" type="search" placeholder="Cari nama, kategori, atau keterangan sumber…" aria-label="Cari sumber" />
+        <select id="statusFilter" class="select" aria-label="Saring status pemeriksaan"><option value="all">Semua status</option><option value="pending">Belum diperiksa</option><option value="checked">Sudah diperiksa</option></select>
+      </div>
+      <div id="categoryFilters" class="filters" aria-label="Filter kategori"></div>
+    </section>
+    <div class="list-head"><strong>Sumber yang dipantau</strong><span id="resultCount" aria-live="polite"></span></div>
+    <section id="sourceGrid" class="grid" aria-label="Daftar sumber pantauan"></section>
+    <p class="note"><strong>Catatan tautan:</strong> tautan Agent Radar ke trycloudflare dan URL kanonis Boltbook belum tersedia. Untuk sementara tombolnya membuka pencarian web, bukan mengklaim sebagai tautan resmi. Lengkapi URL setelah tautan yang benar diberikan.</p>
+    <a class="back" href="index.html">Kembali ke AgentRam</a>
+  </main>
+  <script>
+    const sources = [
+      {id:'unitytool',name:'unitytool.app',category:'Agent discovery',description:'Agent Radar — direktori/pemantauan agent.',url:'https://unitytool.app',label:'Buka unitytool.app'},
+      {id:'mint-jettt',name:'mint.jettt',category:'Mint dashboard',description:'Dashboard mint.',url:'https://mint.jettt',label:'Buka mint.jettt'},
+      {id:'datt',name:'datt.my',category:'Mint dashboard',description:'MintRadar.',url:'https://datt.my',label:'Buka datt.my'},
+      {id:'boltbook',name:'Boltbook',category:'Community & alpha',description:'Alphapedia + Alpha Board. URL kanonis belum diberikan; gunakan pencarian sementara.',url:'https://www.google.com/search?q='+encodeURIComponent('Boltbook Alphapedia Alpha Board'),label:'Cari Boltbook',placeholder:true},
+      {id:'nftcalendar',name:'nftcalendar.io/b/bsc',category:'Calendar',description:'Kalender NFT untuk BSC.',url:'https://nftcalendar.io/b/bsc',label:'Buka kalender BSC'},
+      {id:'thecolony',name:'thecolony.uk',category:'Agent discovery',description:'Sumber pemantauan agent.',url:'https://thecolony.uk',label:'Buka thecolony.uk'},
+      {id:'whalecalls',name:'whalecalls.club/monitor',category:'Monitoring',description:'Halaman monitor WhaleCalls.',url:'https://whalecalls.club/monitor',label:'Buka WhaleCalls monitor'},
+      {id:'agentidhub',name:'agentidhub.eth.limo',category:'Agent discovery',description:'Agent ID Hub.',url:'https://agentidhub.eth.limo',label:'Buka Agent ID Hub'},
+      {id:'agent-radar-tunnel',name:'Agent Radar @airdrop_nanhan',category:'Agent discovery',description:'Tautan trycloudflare spesifik belum diberikan; pencarian ini hanya placeholder untuk menemukannya.',url:'https://www.google.com/search?q='+encodeURIComponent('"Agent Radar" "airdrop_nanhan" trycloudflare'),label:'Cari tautan Agent Radar',placeholder:true},
+      {id:'web-search',name:'Web search',category:'Search',description:'Keyword: “free mint”, “Agent ID”, “免费铸造”.',url:'https://www.google.com/search?q='+encodeURIComponent('"free mint" "Agent ID" OR 免费铸造'),label:'Cari keyword web'},
+      {id:'social-search',name:'Social search (X)',category:'Search',description:'Cari postingan X terkait free mint, Agent ID, dan 免费铸造.',url:'https://x.com/search?q='+encodeURIComponent('("free mint" OR "Agent ID" OR 免费铸造)'),label:'Cari postingan di X'}
+    ];
+    const storageKey='agentram_watchlist_source_checks_v1';
+    let checked={};
+    try{checked=JSON.parse(localStorage.getItem(storageKey)||'{}')||{};}catch{checked={};}
+    let selectedCategory='Semua';
+    const categories=['Semua',...new Set(sources.map(source=>source.category))];
+    const esc=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    function save(){try{localStorage.setItem(storageKey,JSON.stringify(checked));}catch{}}
+    function renderCategories(){
+      const container=document.querySelector('#categoryFilters');
+      container.innerHTML=categories.map(category=>`<button class="chip ${selectedCategory===category?'active':''}" type="button" data-category="${esc(category)}" aria-pressed="${selectedCategory===category}">${esc(category)}</button>`).join('');
+      container.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>{selectedCategory=button.dataset.category;renderCategories();renderSources();}));
+    }
+    function renderSources(){
+      const query=document.querySelector('#search').value.trim().toLowerCase();
+      const status=document.querySelector('#statusFilter').value;
+      const filtered=sources.filter(source=>{
+        const isChecked=Boolean(checked[source.id]);
+        const matchesCategory=selectedCategory==='Semua'||source.category===selectedCategory;
+        const matchesStatus=status==='all'||(status==='checked'&&isChecked)||(status==='pending'&&!isChecked);
+        const matchesQuery=!query||[source.name,source.category,source.description,source.label].join(' ').toLowerCase().includes(query);
+        return matchesCategory&&matchesStatus&&matchesQuery;
+      });
+      document.querySelector('#resultCount').textContent=`${filtered.length} dari ${sources.length} sumber`;
+      document.querySelector('#totalCount').textContent=sources.length;
+      document.querySelector('#checkedCount').textContent=Object.keys(checked).filter(id=>sources.some(source=>source.id===id)&&checked[id]).length;
+      document.querySelector('#pendingCount').textContent=sources.length-Number(document.querySelector('#checkedCount').textContent);
+      document.querySelector('#sourceGrid').innerHTML=filtered.length?filtered.map(source=>{
+        const record=checked[source.id];
+        const isChecked=Boolean(record);
+        const checkedAt=typeof record==='string'?record:'';
+        return `<article class="source-card"><div class="card-head"><h3>${esc(source.name)}</h3><span class="category">${esc(source.category)}</span></div><p class="description">${esc(source.description)}</p><a class="source-link ${source.placeholder?'placeholder':''}" href="${esc(source.url)}" target="_blank" rel="noopener noreferrer">${esc(source.label)} ↗</a><div class="card-foot"><span class="check-state ${isChecked?'done':''}">${isChecked?'✓ Sudah diperiksa'+(checkedAt?' · '+esc(checkedAt):''):'○ Belum diperiksa'}</span><button class="check-btn" type="button" data-id="${esc(source.id)}">${isChecked?'Batalkan':'Tandai diperiksa'}</button></div></article>`;
+      }).join(''):'<div class="empty">Tidak ada sumber yang cocok dengan pencarian atau filter.</div>';
+      document.querySelectorAll('.check-btn').forEach(button=>button.addEventListener('click',()=>{
+        const id=button.dataset.id;
+        if(checked[id]) delete checked[id];
+        else checked[id]=new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'short'}).format(new Date());
+        save();renderSources();
+      }));
+    }
+    document.querySelector('#search').addEventListener('input',renderSources);
+    document.querySelector('#statusFilter').addEventListener('change',renderSources);
+    renderCategories();renderSources();
+  </script>
+</body>
+</html>
