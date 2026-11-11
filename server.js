@@ -67,7 +67,7 @@ function ensureSeedData() {
   ]);
 
   ensureJsonFile(USERS_FILE, [
-    { username: 'admin', password: 'admin123', role: 'admin' }
+    { username: process.env.ADMIN_USERNAME || 'admin', password: process.env.ADMIN_PASSWORD, role: 'admin' }
   ]);
 }
 
