@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'agentr am.agents.v1'.replace(' ', '');
+const STORAGE_KEY = 'agentram.agents.v1';
 const statusFilters = ['All', 'Active', 'Pending', 'Alert'];
 let agents = [];
 let selectedStatus = 'All';
@@ -111,6 +111,7 @@ function renderTable() {
       <td>${escapeHTML(agent.lastSync || '—')}</td>
       <td>${escapeHTML(agent.notes || '—')}</td>
       <td class="row-actions">
+        <button class="action-btn" type="button" data-action="view" data-id="${escapeHTML(agent.id)}">View</button>
         <button class="action-btn" type="button" data-action="edit" data-id="${escapeHTML(agent.id)}">Edit</button>
         <button class="action-btn danger-btn" type="button" data-action="delete" data-id="${escapeHTML(agent.id)}">Hapus</button>
       </td>
@@ -140,6 +141,47 @@ function openDialog(agent) {
   $('#agentNotes').value = agent?.notes || '';
   $('#agentDialog').showModal();
   $('#agentId').focus();
+}
+
+function openDetailModal(agent) {
+  const detailContent = $('#detailContent');
+  detailContent.innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-item">
+        <span>Agent ID</span>
+        <strong>${escapeHTML(agent.id)}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Nama</span>
+        <strong>${escapeHTML(agent.name)}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Wallet</span>
+        <strong>${escapeHTML(agent.wallet || '—')}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Status</span>
+        <strong><span class="badge ${statusBadgeClass(agent.status)}"><span class="status-dot"></span>${escapeHTML(agent.status)}</span></strong>
+      </div>
+      <div class="detail-item">
+        <span>Risk</span>
+        <strong><span class="badge ${riskBadgeClass(agent.risk)}">${escapeHTML(agent.risk)}</span></strong>
+      </div>
+      <div class="detail-item">
+        <span>Trust</span>
+        <strong>${Number(agent.trust)}%</strong>
+      </div>
+      <div class="detail-item">
+        <span>Last Sync</span>
+        <strong>${escapeHTML(agent.lastSync || '—')}</strong>
+      </div>
+      <div class="detail-item wide-item">
+        <span>Notes</span>
+        <strong>${escapeHTML(agent.notes || '—')}</strong>
+      </div>
+    </div>
+  `;
+  $('#agentDetailDialog').showModal();
 }
 
 function showToast(message) {
@@ -203,7 +245,10 @@ function handleTableAction(event) {
   if (!button) return;
   const agent = agents.find((item) => item.id === button.dataset.id);
   if (!agent) return;
-  if (button.dataset.action === 'edit') {
+
+  if (button.dataset.action === 'view') {
+    openDetailModal(agent);
+  } else if (button.dataset.action === 'edit') {
     openDialog(agent);
   } else if (button.dataset.action === 'delete' && confirm(`Hapus agent ${agent.id}?`)) {
     agents = agents.filter((item) => item.id !== agent.id);
@@ -223,8 +268,13 @@ async function init() {
   $('#agentTableBody').addEventListener('click', handleTableAction);
   $('#closeDialogButton').addEventListener('click', () => $('#agentDialog').close());
   $('#cancelDialogButton').addEventListener('click', () => $('#agentDialog').close());
+  $('#closeDetailDialogButton').addEventListener('click', () => $('#agentDetailDialog').close());
+  $('#detailCloseButton').addEventListener('click', () => $('#agentDetailDialog').close());
   $('#agentDialog').addEventListener('click', (event) => {
     if (event.target === $('#agentDialog')) $('#agentDialog').close();
+  });
+  $('#agentDetailDialog').addEventListener('click', (event) => {
+    if (event.target === $('#agentDetailDialog')) $('#agentDetailDialog').close();
   });
 }
 

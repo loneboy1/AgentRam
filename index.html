@@ -112,6 +112,20 @@
       </form>
     </dialog>
 
+    <dialog id="agentDetailDialog" class="detail-dialog" aria-labelledby="detailTitle">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Detail Agent</p>
+          <h2 id="detailTitle">Informasi Agent</h2>
+        </div>
+        <button class="icon-btn" type="button" id="closeDetailDialogButton" aria-label="Tutup detail">×</button>
+      </div>
+      <div id="detailContent" class="detail-content"></div>
+      <div class="dialog-actions">
+        <button class="primary-btn" type="button" id="detailCloseButton">Tutup</button>
+      </div>
+    </dialog>
+
     <p id="toast" class="toast" role="status" aria-live="polite"></p>
     <script src="app.js"></script>
   </body>
