@@ -21,12 +21,12 @@
         </div>
 
         <nav class="nav">
-          <a class="active" href="#">Overview</a>
-          <a href="#">Agents</a>
-          <a href="#">Alerts</a>
+          <a class="active" href="#" data-menu="overview">Overview</a>
+          <a href="#" data-menu="agents">Agents</a>
+          <a href="#" data-menu="alerts">Alerts</a>
           <a href="watchlist.html">Daftar Pantauan</a>
-          <a href="#">Reports</a>
-          <a href="#">Audit</a>
+          <a href="#" data-menu="reports">Reports</a>
+          <a href="#" data-menu="audit">Audit</a>
         </nav>
 
         <div class="health-card">
@@ -141,6 +141,20 @@
       <div id="detailContent" class="detail-content"></div>
       <div class="dialog-actions">
         <button class="primary-btn" type="button" id="detailCloseButton">Tutup</button>
+      </div>
+    </dialog>
+
+    <dialog id="auditDialog" class="detail-dialog" aria-labelledby="auditTitle">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Audit Trail</p>
+          <h2 id="auditTitle">Log Audit</h2>
+        </div>
+        <button class="icon-btn" type="button" id="closeAuditDialogButton" aria-label="Tutup audit">×</button>
+      </div>
+      <div id="auditContent" class="detail-content"></div>
+      <div class="dialog-actions">
+        <button class="primary-btn" type="button" id="auditCloseButton">Tutup</button>
       </div>
     </dialog>
 
