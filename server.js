@@ -76,6 +76,30 @@ function smartFilterAgents(list, query = '') {
   });
 }
 
+function getRiskScore(agent) {
+  let score = 0;
+  const statusBoost = { Active: 5, Pending: 25, Alert: 45 };
+  const riskBoost = { Low: 10, Medium: 28, High: 48 };
+  const trust = Number(agent.trust || 0);
+
+  score += statusBoost[agent.status] || 0;
+  score += riskBoost[agent.risk] || 0;
+  score += Math.max(0, 60 - trust) / 2;
+
+  const text = `${agent.name || ''} ${agent.notes || ''}`.toLowerCase();
+  if (/(freemint|free mint|launchpad|airdrop|mint|campaign|promo)/i.test(text)) score += 18;
+  if (/(urgent|heartbeat|failed|invalid|breach|suspicious)/i.test(text)) score += 12;
+  if (agent.wallet && !/^0x/i.test(agent.wallet)) score += 8;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function riskLevel(score) {
+  if (score >= 70) return 'High';
+  if (score >= 40) return 'Medium';
+  return 'Low';
+}
+
 function getAuthHeaders() {
   const token = localStorage.getItem('agentram_token');
   return {
@@ -85,11 +109,7 @@ function getAuthHeaders() {
 }
 
 async function apiRequest(path, method = 'GET', payload) {
-  const requestOptions = {
-    method,
-    headers: getAuthHeaders()
-  };
-
+  const requestOptions = { method, headers: getAuthHeaders() };
   if (payload !== undefined && !['GET', 'DELETE'].includes(method)) {
     requestOptions.body = JSON.stringify(payload);
   }
@@ -147,6 +167,38 @@ function statusBadgeClass(status) {
 
 function riskBadgeClass(risk) {
   return risk === 'Low' ? 'green' : risk === 'Medium' ? 'yellow' : 'red';
+}
+
+function renderRiskSummary() {
+  const cards = [
+    {
+      label: 'Low Risk',
+      className: 'low',
+      count: agents.filter((agent) => getRiskScore(agent) < 40).length
+    },
+    {
+      label: 'Watchlist',
+      className: 'medium',
+      count: agents.filter((agent) => getRiskScore(agent) >= 40 && getRiskScore(agent) < 70).length
+    },
+    {
+      label: 'Critical',
+      className: 'high',
+      count: agents.filter((agent) => getRiskScore(agent) >= 70).length
+    },
+    {
+      label: 'Avg Trust',
+      className: 'low',
+      count: agents.length ? Math.round(agents.reduce((sum, agent) => sum + Number(agent.trust || 0), 0) / agents.length) : 0
+    }
+  ];
+
+  $('#riskSummary').innerHTML = cards.map((card) => `
+    <div class="risk-item ${card.className}">
+      <div class="label">${card.label}</div>
+      <strong>${card.count}${card.label === 'Avg Trust' ? '%' : ''}</strong>
+    </div>
+  `).join('');
 }
 
 function renderStats() {
@@ -218,7 +270,9 @@ function renderFilters() {
 function renderTable() {
   const searchValue = $('#searchInput').value.trim();
   const filteredAgents = smartFilterAgents(
-    agents.filter((agent) => selectedStatus === 'All' || agent.status === selectedStatus),
+    agents
+      .filter((agent) => selectedStatus === 'All' || agent.status === selectedStatus)
+      .sort((a, b) => getRiskScore(b) - getRiskScore(a)),
     searchValue
   );
 
@@ -230,27 +284,32 @@ function renderTable() {
     return;
   }
 
-  body.innerHTML = filteredAgents.map((agent) => `
-    <tr>
-      <td><strong>${escapeHTML(agent.id)}</strong></td>
-      <td>${escapeHTML(agent.name)}</td>
-      <td>${escapeHTML(agent.wallet || '—')}</td>
-      <td><span class="badge ${statusBadgeClass(agent.status)}"><span class="status-dot"></span>${escapeHTML(agent.status)}</span></td>
-      <td><span class="badge ${riskBadgeClass(agent.risk)}">${escapeHTML(agent.risk)}</span></td>
-      <td><span class="badge ${Number(agent.trust) >= 85 ? 'green' : Number(agent.trust) >= 70 ? 'yellow' : 'blue'}">${Number(agent.trust)}%</span></td>
-      <td>${escapeHTML(agent.lastSync || '—')}</td>
-      <td>${escapeHTML(agent.notes || '—')}</td>
-      <td class="row-actions">
-        <button class="action-btn" type="button" data-action="view" data-id="${escapeHTML(agent.id)}">View</button>
-        <button class="action-btn" type="button" data-action="edit" data-id="${escapeHTML(agent.id)}">Edit</button>
-        <button class="action-btn danger-btn" type="button" data-action="delete" data-id="${escapeHTML(agent.id)}">Hapus</button>
-      </td>
-    </tr>
-  `).join('');
+  body.innerHTML = filteredAgents.map((agent) => {
+    const score = getRiskScore(agent);
+    const risk = riskLevel(score);
+    return `
+      <tr>
+        <td><strong>${escapeHTML(agent.id)}</strong></td>
+        <td>${escapeHTML(agent.name)}</td>
+        <td>${escapeHTML(agent.wallet || '—')}</td>
+        <td><span class="badge ${statusBadgeClass(agent.status)}"><span class="status-dot"></span>${escapeHTML(agent.status)}</span></td>
+        <td><span class="badge ${riskBadgeClass(risk)}">${escapeHTML(risk)}</span></td>
+        <td><span class="badge ${Number(agent.trust) >= 85 ? 'green' : Number(agent.trust) >= 70 ? 'yellow' : 'blue'}">${Number(agent.trust)}%</span></td>
+        <td>${escapeHTML(agent.lastSync || '—')}</td>
+        <td>${escapeHTML(agent.notes || '—')}</td>
+        <td class="row-actions">
+          <button class="action-btn" type="button" data-action="view" data-id="${escapeHTML(agent.id)}">View</button>
+          <button class="action-btn" type="button" data-action="edit" data-id="${escapeHTML(agent.id)}">Edit</button>
+          <button class="action-btn danger-btn" type="button" data-action="delete" data-id="${escapeHTML(agent.id)}">Hapus</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function refreshDashboard() {
   renderStats();
+  renderRiskSummary();
   renderStatusChart();
   renderTrustChart();
   renderFilters();
@@ -276,6 +335,7 @@ function openDialog(agent) {
 }
 
 function openDetailModal(agent) {
+  const score = getRiskScore(agent);
   $('#detailContent').innerHTML = `
     <div class="detail-grid">
       <div class="detail-item">
@@ -297,6 +357,10 @@ function openDetailModal(agent) {
       <div class="detail-item">
         <span>Risk</span>
         <strong><span class="badge ${riskBadgeClass(agent.risk)}">${escapeHTML(agent.risk)}</span></strong>
+      </div>
+      <div class="detail-item">
+        <span>Risk Score</span>
+        <strong>${score}/100 (${riskLevel(score)})</strong>
       </div>
       <div class="detail-item">
         <span>Trust</span>
@@ -450,7 +514,7 @@ function ensureBnbLookupPanel() {
         Wallet Address
         <input id="bnbWallet" type="text" placeholder="0x..." />
       </label>
-      <label class="full-width-form">
+      <label class="full-width">
         Agent Name
         <input id="bnbName" type="text" placeholder="contoh: my-agent" />
       </label>
@@ -464,7 +528,7 @@ function ensureBnbLookupPanel() {
       <label>
         Filter
         <select id="bnbFilterScope">
-          ${bnbFilters.map((filterItem) => `<option value="${filterItem.value}">${filterItem.label}</option>`).join('')}
+          ${bnbFilters.map((item) => `<option value="${item.value}">${item.label}</option>`).join('')}
         </select>
       </label>
       <div class="dialog-actions">
@@ -557,7 +621,10 @@ async function runBnbLookup() {
     const rows = filteredResults.map((item) => `
       <div class="detail-item wide-item">
         <span>Agent ${item.agentId ?? '—'}</span>
-        <strong>${escapeHTML(item.name || 'Unnamed')} • ${escapeHTML(item.ownerAddress || '—')} • ${item.freemintCandidate ? 'Freemint candidate' : 'Regular agent'}</strong>
+        <strong>
+          ${escapeHTML(item.name || 'Unnamed')} • ${escapeHTML(item.ownerAddress || '—')} • ${item.freemintCandidate ? 'Freemint candidate' : 'Regular agent'} • ${item.riskLevel || 'Unknown'} (${item.riskScore ?? 0}/100)
+        </strong>
+        ${item.evidence && item.evidence.length ? `<div class="result-badge">${escapeHTML(item.evidence.slice(0, 3).join(' • '))}</div>` : ''}
       </div>
     `).join('');
 

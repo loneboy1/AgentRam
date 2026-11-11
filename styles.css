@@ -49,7 +49,7 @@
           <a class="active" href="#">Overview</a>
           <a href="#">Agents</a>
           <a href="#">Alerts</a>
-          <a href="#">Reports</a>
+          <a href="#">Freemint</a>
           <a href="#">Audit</a>
         </nav>
 
@@ -75,6 +75,8 @@
         </header>
 
         <section class="stats-grid" id="statsGrid"></section>
+
+        <section id="riskSummary" class="risk-summary"></section>
 
         <section class="wide-panel">
           <div class="panel-header">
