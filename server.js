@@ -368,4 +368,70 @@ const server = http.createServer(async (req, res) => {
         });
 
         sendJson(res, 200, result);
-      } catch (error) {
+      } catch (error) {        sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
+      }
+      return;
+    }
+
+    sendJson(res, 405, { message: 'Method not allowed' });
+    return;
+  }
+
+  if (parsedUrl.pathname === '/api/bnb/health') {
+    sendJson(res, 200, {
+      ok: true,
+      network: 'bsc-mainnet',
+      registryContract: BNB_NETWORKS['bsc-mainnet'].registryContract,
+      source: '8004scan indexer',
+      note: 'Official ERC-8004 registry lookup endpoint for BNB agent records.'
+    });
+    return;
+  }
+  if (!parsedUrl.pathname.startsWith('/api/')) {
+    try {
+      if (parsedUrl.pathname === '/' || parsedUrl.pathname === '/index.html') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(fs.readFileSync(path.join(__dirname, 'index.html')));
+        return;
+      }
+      if (parsedUrl.pathname === '/dashboard.js') {
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
+        res.end(fs.readFileSync(path.join(__dirname, 'dashboard.js')));
+        return;
+      }
+      if (parsedUrl.pathname === '/styles.css') {
+        res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' });
+        res.end(fs.readFileSync(path.join(__dirname, 'styles.css')));
+        return;
+      }
+      if (parsedUrl.pathname === '/about.html') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(fs.readFileSync(path.join(__dirname, 'about.html')));
+        return;
+      }
+      if (parsedUrl.pathname === '/watchlist.html') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(fs.readFileSync(path.join(__dirname, 'watchlist.html')));
+        return;
+      }
+      if (parsedUrl.pathname === '/agents.json') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(fs.readFileSync(path.join(__dirname, 'agents.json')));
+        return;
+      }
+    } catch (error) {
+      sendJson(res, 404, { message: 'Not found' });
+      return;
+    }
+  }
+  sendJson(res, 404, { message: 'Not found' });
+});
+
+if (process.env.NODE_ENV !== 'production') {
+  server.listen(PORT, () => {
+    console.log(`AgentRam API running at http://localhost:${PORT}`);
+    console.log('BNB Agent lookup: /api/bnb/lookup?agentId=123&network=bsc-mainnet');
+  });
+}
+
+module.exports = (req, res) => server.emit('request', req, res);
