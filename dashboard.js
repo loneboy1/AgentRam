@@ -61,18 +61,10 @@ function smartFilterAgents(list, query = '') {
   });
 }
 
-function getAuthHeaders() {
-  const token = localStorage.getItem('agentram_token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
-  };
-}
-
 async function apiRequest(path, method = 'GET', payload) {
   const response = await fetch(`${API_URL}${path}`, {
     method,
-    headers: getAuthHeaders(),
+    headers: { 'Content-Type': 'application/json' },
     ...(payload !== undefined ? { body: JSON.stringify(payload) } : {})
   });
 
@@ -86,16 +78,6 @@ async function apiRequest(path, method = 'GET', payload) {
   return data;
 }
 
-async function loadMe() {
-  try {
-    const data = await apiRequest('/me');
-    return data;
-  } catch (error) {
-    logout();
-    return null;
-  }
-}
-
 async function loadAgents() {
   try {
     const data = await apiRequest('/agents');
@@ -107,11 +89,6 @@ async function loadAgents() {
   }
 
   return [];
-}
-
-function logout() {
-  localStorage.removeItem('agentram_token');
-  window.location.reload();
 }
 
 function showToast(message) {
@@ -361,71 +338,14 @@ async function handleTableAction(event) {
   }
 }
 
-async function handleLogin(event) {
-  event.preventDefault();
-  const username = $('#loginUsername').value.trim();
-  const password = $('#loginPassword').value;
-  const submitButton = $('#loginSubmit');
-
-  submitButton.disabled = true;
-  submitButton.textContent = 'Masuk...';
-
-  try {
-    const data = await fetch(`${API_URL}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    }).then(async (response) => {
-      const text = await response.text();
-      const json = text ? JSON.parse(text) : null;
-      if (!response.ok) throw new Error(json?.message || 'Login gagal');
-      return json;
-    });
-
-    localStorage.setItem('agentram_token', data.token);
-    $('#loginForm').reset();
-    initDashboard();
-  } catch (error) {
-    $('#loginError').textContent = error.message || 'Login gagal';
-  } finally {
-    submitButton.disabled = false;
-    submitButton.textContent = 'Masuk';
-  }
-}
-
-function renderLogin() {
-  $('#app').classList.add('hidden');
-  $('#loginScreen').classList.remove('hidden');
-}
-
-function renderDashboard() {
-  $('#loginScreen').classList.add('hidden');
-  $('#app').classList.remove('hidden');
-}
-
 async function initDashboard() {
-  const user = await loadMe();
-  if (!user) {
-    renderLogin();
-    return;
-  }
-
-  renderDashboard();
-  $('#usernameLabel').textContent = user.username;
   agents = await loadAgents();
   refreshDashboard();
 }
 
 async function init() {
-  const token = localStorage.getItem('agentram_token');
-  if (!token) {
-    renderLogin();
-  } else {
-    await initDashboard();
-  }
+  await initDashboard();
 
-  $('#loginForm').addEventListener('submit', handleLogin);
-  $('#logoutButton').addEventListener('click', logout);
   $('#searchInput').addEventListener('input', renderTable);
   $('#addAgentButton').addEventListener('click', () => openDialog());
   $('#exportButton').addEventListener('click', () => {
