@@ -1,0 +1,32 @@
+[
+  {
+    "id": "FA-1024",
+    "name": "Maya Rafi",
+    "wallet": "0xA4D8...2201",
+    "status": "Active",
+    "risk": "Low",
+    "trust": 94,
+    "lastSync": "2 min ago",
+    "notes": "Stable sync and healthy latency"
+  },
+  {
+    "id": "FA-1031",
+    "name": "Nadya Chen",
+    "wallet": "0xC11A...9E20",
+    "status": "Pending",
+    "risk": "Medium",
+    "trust": 78,
+    "lastSync": "14 min ago",
+    "notes": "Waiting for validation check"
+  },
+  {
+    "id": "FA-1045",
+    "name": "Rian Suryadi",
+    "wallet": "0x71B2...EE89",
+    "status": "Alert",
+    "risk": "High",
+    "trust": 52,
+    "lastSync": "5 min ago",
+    "notes": "Repeated failed node heartbeat"
+  }
+]

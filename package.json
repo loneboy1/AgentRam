@@ -1,0 +1,9 @@
+{
+  "name": "agentram-local-api",
+  "version": "1.0.0",
+  "description": "Simple local API for AgentRam monitoring dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
