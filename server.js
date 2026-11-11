@@ -7,12 +7,22 @@ const { URL } = require('url');
 const PORT = 3000;
 const DATA_FILE = path.join(__dirname, 'data', 'agents.json');
 const USERS_FILE = path.join(__dirname, 'data', 'users.json');
-const BNB_RPC_URL = process.env.BNB_RPC_URL || 'https://bsc-dataseed.binance.org/';
-const FREEMINT_CONTRACTS = {
-  agentToken: '0xA2643B889eEb232708a644f15f70f951773dDEF9',
-  agentIdRegistry: '0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F'
-};
 const sessions = new Map();
+
+const BNB_NETWORKS = {
+  'bsc-mainnet': {
+    name: 'bsc-mainnet',
+    chainId: 56,
+    registryContract: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432',
+    scanApi: 'https://www.8004scan.io/api/v1'
+  },
+  'bsc-testnet': {
+    name: 'bsc-testnet',
+    chainId: 97,
+    registryContract: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
+    scanApi: 'https://www.8004scan.io/api/v1'
+  }
+};
 
 function ensureJsonFile(filePath, defaultData) {
   const dir = path.dirname(filePath);
@@ -53,56 +63,6 @@ function ensureSeedData() {
       trust: 52,
       lastSync: '5 min ago',
       notes: 'Repeated failed node heartbeat'
-    },
-    {
-      id: 'FA-1088',
-      name: 'Alya Putri',
-      wallet: '0x9EE4...AB42',
-      status: 'Active',
-      risk: 'Low',
-      trust: 97,
-      lastSync: '1 min ago',
-      notes: 'No critical events detected'
-    },
-    {
-      id: 'FA-1102',
-      name: 'Fahri Zain',
-      wallet: '0x5531...10FA',
-      status: 'Alert',
-      risk: 'Medium',
-      trust: 64,
-      lastSync: '9 min ago',
-      notes: 'Manual review required'
-    },
-    {
-      id: 'FA-1120',
-      name: 'Dina Karina',
-      wallet: '0xF097...87DB',
-      status: 'Active',
-      risk: 'Low',
-      trust: 90,
-      lastSync: '3 min ago',
-      notes: 'Rewards distribution normal'
-    },
-    {
-      id: 'FA-1139',
-      name: 'Bima Hadi',
-      wallet: '0x12AF...77B2',
-      status: 'Pending',
-      risk: 'Low',
-      trust: 81,
-      lastSync: '21 min ago',
-      notes: 'Awaiting second credential scan'
-    },
-    {
-      id: 'FA-1164',
-      name: 'Sinta Lestari',
-      wallet: '0xB708...9C40',
-      status: 'Active',
-      risk: 'Low',
-      trust: 96,
-      lastSync: '6 min ago',
-      notes: 'Strong compliance score'
     }
   ]);
 
@@ -145,114 +105,6 @@ function getSessionFromRequest(req) {
   return sessions.get(token) || null;
 }
 
-function parseQuery(query = '') {
-  const q = String(query || '').toLowerCase().trim();
-  if (!q) {
-    return { text: '', status: null, risk: null, minTrust: null, wallet: null, keywords: [] };
-  }
-
-  const normalized = q.replace(/[\-_/]+/g, ' ');
-  const tokens = normalized.split(/\s+/).filter(Boolean);
-  const status = ['active', 'pending', 'alert'].find((statusName) => tokens.includes(statusName)) || null;
-  const risk = ['low', 'medium', 'high'].find((riskName) => tokens.includes(riskName)) || null;
-
-  const minTrustToken = tokens.find((token) => /^trust[><=]?\d+$/.test(token) || /^\d+%?$/.test(token));
-  const minTrust = minTrustToken ? Number(String(minTrustToken).replace(/[^\d]/g, '')) : null;
-  const walletToken = tokens.find((token) => token.startsWith('0x')) || null;
-
-  return {
-    text: q,
-    status,
-    risk,
-    minTrust,
-    wallet: walletToken,
-    keywords: tokens.filter((token) =>
-      !['active', 'pending', 'alert', 'low', 'medium', 'high', 'trust', 'wallet', 'bnb', 'agent', 'search', 'find', 'show', 'list'].includes(token)
-    )
-  };
-}
-
-function scoreAgent(agent, filters) {
-  let score = 0;
-  const haystack = [agent.id, agent.name, agent.wallet, agent.status, agent.risk, agent.notes].join(' ').toLowerCase();
-
-  if (filters.text) {
-    if (haystack.includes(filters.text)) score += 40;
-    filters.keywords.forEach((keyword) => {
-      if (haystack.includes(keyword)) score += 12;
-    });
-  }
-
-  if (filters.status && agent.status.toLowerCase() === filters.status) score += 22;
-  if (filters.risk && agent.risk.toLowerCase() === filters.risk) score += 18;
-  if (filters.wallet && String(agent.wallet).toLowerCase().includes(filters.wallet)) score += 25;
-  if (filters.minTrust !== null && Number(agent.trust) >= filters.minTrust) score += 15;
-
-  if (agent.status === 'Alert') score += 8;
-  if (agent.risk === 'High') score += 8;
-
-  return score;
-}
-
-function smartSearchAgents(query = '', list = []) {
-  const filters = parseQuery(query);
-  const results = list
-    .map((agent) => ({ agent, score: scoreAgent(agent, filters) }))
-    .filter(({ score, agent }) => {
-      if (!filters.text) return true;
-      if (filters.status && agent.status.toLowerCase() !== filters.status) return false;
-      if (filters.risk && agent.risk.toLowerCase() !== filters.risk) return false;
-      if (filters.minTrust !== null && Number(agent.trust) < filters.minTrust) return false;
-      if (filters.wallet && !String(agent.wallet).toLowerCase().includes(filters.wallet)) return false;
-      return score > 0 || agent.id.toLowerCase().includes(filters.text) || agent.name.toLowerCase().includes(filters.text);
-    })
-    .sort((a, b) => b.score - a.score)
-    .map(({ agent }) => agent);
-
-  return {
-    query,
-    filters,
-    total: results.length,
-    matches: results.slice(0, 20),
-    summary: results.length
-      ? `Ditemukan ${results.length} agent yang paling cocok untuk query "${query || 'semua data'}".`
-      : `Tidak ada agent yang cocok untuk query "${query}".`
-  };
-}
-
-async function rpcRequest(method, params = []) {
-  const response = await fetch(BNB_RPC_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
-  });
-
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`BNB RPC request failed: ${response.status} ${text}`);
-  }
-
-  const data = text ? JSON.parse(text) : null;
-  if (!data || data.error) {
-    throw new Error(data?.error?.message || 'BNB RPC returned no data');
-  }
-
-  return data.result;
-}
-
-async function getBnbHealthSummary() {
-  const chainIdHex = await rpcRequest('eth_chainId');
-  const blockNumberHex = await rpcRequest('eth_blockNumber');
-
-  return {
-    rpc: BNB_RPC_URL,
-    chainId: Number.parseInt(chainIdHex, 16),
-    blockNumber: Number.parseInt(blockNumberHex, 16),
-    contracts: FREEMINT_CONTRACTS,
-    status: 'connected'
-  };
-}
-
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json',
@@ -280,6 +132,113 @@ function parseBody(req) {
   });
 }
 
+function decodeAgentUri(agentUri) {
+  if (!agentUri || typeof agentUri !== 'string') return null;
+
+  try {
+    if (agentUri.startsWith('data:application/json;base64,')) {
+      const base64 = agentUri.replace(/^data:application\/json;base64,/i, '');
+      const decoded = Buffer.from(base64, 'base64').toString('utf8');
+      return JSON.parse(decoded);
+    }
+
+    if (agentUri.startsWith('http://') || agentUri.startsWith('https://')) {
+      return null;
+    }
+  } catch (error) {
+    return null;
+  }
+
+  return null;
+}
+
+function normalizeAgentLookup(item) {
+  const tokenId = item?.token_id ?? item?.agentId ?? item?.id ?? null;
+  const ownerAddress = item?.owner_address ?? item?.ownerAddress ?? '';
+  const agentUri = item?.agent_uri ?? item?.agentUri ?? '';
+  const name = item?.name ?? '';
+  const description = item?.description ?? '';
+  const decodedAgentUri = decodeAgentUri(agentUri);
+  const textBlob = [
+    name,
+    description,
+    ownerAddress,
+    agentUri,
+    decodedAgentUri ? JSON.stringify(decodedAgentUri) : '',
+    Array.isArray(item?.services) ? item.services.map((svc) => JSON.stringify(svc)).join(' ') : ''
+  ].join(' ').toLowerCase();
+
+  const freemintMatch = /(freemint|free[-\s]?mint|minting|launchpad|campaign)/i.test(textBlob);
+
+  return {
+    agentId: tokenId ? Number(tokenId) : null,
+    name,
+    ownerAddress,
+    agentUri,
+    agentURI: agentUri,
+    decodedAgentUri,
+    freemintCandidate: freemintMatch,
+    raw: item
+  };
+}
+
+async function fetchBnbAgents(networkName = 'bsc-mainnet') {
+  const network = BNB_NETWORKS[networkName] || BNB_NETWORKS['bsc-mainnet'];
+  const url = new URL(`${network.scanApi}/agents`);
+  url.searchParams.set('chain_id', String(network.chainId));
+  url.searchParams.set('limit', '100');
+  url.searchParams.set('offset', '0');
+
+  const response = await fetch(url.toString(), {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(30000)
+  });
+
+  if (!response.ok) {
+    throw new Error(`8004scan API request failed: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const items = Array.isArray(data?.items) ? data.items : [];
+
+  return {
+    network: network.name,
+    registryContract: network.registryContract,
+    total: Number(data?.total ?? items.length ?? 0),
+    items: items.map(normalizeAgentLookup)
+  };
+}
+
+async function lookupBnbAgent({ agentId, wallet, name, network = 'bsc-mainnet' }) {
+  const networkKey = BNB_NETWORKS[network] ? network : 'bsc-mainnet';
+  const { items, total, registryContract } = await fetchBnbAgents(networkKey);
+
+  let filtered = items;
+
+  if (agentId !== undefined && agentId !== null && agentId !== '') {
+    filtered = filtered.filter((item) => String(item.agentId) === String(agentId));
+  }
+
+  if (wallet) {
+    const targetWallet = wallet.toLowerCase();
+    filtered = filtered.filter((item) => String(item.ownerAddress || '').toLowerCase() === targetWallet);
+  }
+
+  if (name) {
+    const queryName = name.toLowerCase();
+    filtered = filtered.filter((item) => String(item.name || '').toLowerCase().includes(queryName));
+  }
+
+  return {
+    network: networkKey,
+    registryContract,
+    total,
+    matched: filtered.length,
+    results: filtered.slice(0, 10),
+    source: '8004scan indexer'
+  };
+}
+
 const server = http.createServer(async (req, res) => {
   const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
 
@@ -296,66 +255,6 @@ const server = http.createServer(async (req, res) => {
   if (parsedUrl.pathname === '/api/health') {
     sendJson(res, 200, { ok: true, service: 'AgentRam API' });
     return;
-  }
-
-  if (parsedUrl.pathname === '/api/bnb/health') {
-    try {
-      const summary = await getBnbHealthSummary();
-      sendJson(res, 200, summary);
-      return;
-    } catch (error) {
-      sendJson(res, 502, {
-        status: 'disconnected',
-        rpc: BNB_RPC_URL,
-        message: error.message || 'Unable to reach BNB RPC'
-      });
-      return;
-    }
-  }
-
-  if (parsedUrl.pathname === '/api/bnb/contracts') {
-    sendJson(res, 200, {
-      source: 'BNB Smart Chain public RPC / BscScan references',
-      contracts: FREEMINT_CONTRACTS,
-      notes: [
-        'Agent token contract reference: 0xA2643B889eEb232708a644f15f70f951773dDEF9',
-        'Agent ID registry reference: 0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F'
-      ]
-    });
-    return;
-  }
-
-  if (parsedUrl.pathname === '/api/bnb/search') {
-    const query = parsedUrl.searchParams.get('q') || parsedUrl.searchParams.get('wallet') || '';
-    try {
-      const summary = await getBnbHealthSummary();
-      const result = smartSearchAgents(query, readAgents());
-      sendJson(res, 200, {
-        ...result,
-        chain: summary,
-        searchedContracts: FREEMINT_CONTRACTS,
-        note: 'This step verifies BNB RPC connectivity and prepares AgentRam for real on-chain Freemint Agent ID queries.'
-      });
-      return;
-    } catch (error) {
-      sendJson(res, 400, {
-        message: error.message || 'BNB agent search failed',
-        searchedContracts: FREEMINT_CONTRACTS
-      });
-      return;
-    }
-  }
-
-  if (parsedUrl.pathname === '/api/search' || parsedUrl.pathname === '/api/agents/search') {
-    try {
-      const query = parsedUrl.searchParams.get('q') || '';
-      const result = smartSearchAgents(query, readAgents());
-      sendJson(res, 200, result);
-      return;
-    } catch (error) {
-      sendJson(res, 400, { message: error.message || 'Search failed' });
-      return;
-    }
   }
 
   if (parsedUrl.pathname === '/api/login') {
@@ -379,7 +278,7 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     } catch (error) {
-      sendJson(res, 400, { message: error.message || 'Invalid JSON payload' });
+      sendJson(res, 400, { message: error.message || 'Invalid payload' });
       return;
     }
   }
@@ -408,13 +307,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET') {
-      const query = parsedUrl.searchParams.get('q') || '';
-      const agents = readAgents();
-      if (query) {
-        sendJson(res, 200, smartSearchAgents(query, agents));
-      } else {
-        sendJson(res, 200, agents);
-      }
+      sendJson(res, 200, readAgents());
       return;
     }
 
@@ -475,16 +368,79 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (parsedUrl.pathname === '/api/bnb/lookup') {
+    const session = getSessionFromRequest(req);
+    if (!session) {
+      sendJson(res, 401, { message: 'Unauthorized' });
+      return;
+    }
+
+    if (req.method === 'GET') {
+      try {
+        const agentId = parsedUrl.searchParams.get('agentId');
+        const wallet = parsedUrl.searchParams.get('wallet');
+        const name = parsedUrl.searchParams.get('name');
+        const network = parsedUrl.searchParams.get('network') || 'bsc-mainnet';
+
+        const data = await lookupBnbAgent({
+          agentId: agentId === null ? undefined : agentId,
+          wallet: wallet || undefined,
+          name: name || undefined,
+          network
+        });
+
+        sendJson(res, 200, data);
+      } catch (error) {
+        sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
+      }
+      return;
+    }
+
+    if (req.method === 'POST') {
+      try {
+        const body = await parseBody(req);
+        const data = await lookupBnbAgent({
+          agentId: body.agentId,
+          wallet: body.wallet,
+          name: body.name,
+          network: body.network || 'bsc-mainnet'
+        });
+
+        sendJson(res, 200, data);
+      } catch (error) {
+        sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
+      }
+      return;
+    }
+
+    sendJson(res, 405, { message: 'Method not allowed' });
+    return;
+  }
+
+  if (parsedUrl.pathname === '/api/bnb/health') {
+    const session = getSessionFromRequest(req);
+    if (!session) {
+      sendJson(res, 401, { message: 'Unauthorized' });
+      return;
+    }
+
+    sendJson(res, 200, {
+      ok: true,
+      network: 'bsc-mainnet',
+      registryContract: BNB_NETWORKS['bsc-mainnet'].registryContract,
+      source: '8004scan indexer',
+      note: 'Official ERC-8004 registry lookup endpoint for BNB Agentic Wallet IDs.'
+    });
+    return;
+  }
+
   sendJson(res, 404, { message: 'Not found' });
 });
 
 server.listen(PORT, () => {
   console.log(`AgentRam API running at http://localhost:${PORT}`);
   console.log('Default login: admin / admin123');
-  console.log('BNB RPC endpoint: ' + BNB_RPC_URL);
-  console.log('BNB contract references:');
-  console.log(' - Agent token: ' + FREEMINT_CONTRACTS.agentToken);
-  console.log(' - Agent ID registry: ' + FREEMINT_CONTRACTS.agentIdRegistry);
+  console.log('BNB Agent lookup: GET /api/bnb/lookup?agentId=123&network=bsc-mainnet or POST body { agentId, wallet, name, network }');
 });
 
 module.exports = server;
