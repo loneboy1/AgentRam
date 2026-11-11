@@ -1,29 +1,24 @@
 # AgentRam
 
-Dashboard pantauan untuk Freemint Agent ID dengan fitur monitoring, filter, pencarian cepat, dan ringkasan operasional.
+Dashboard pantauan Freemint Agent ID dengan data JSON, pencarian/filter, dan CRUD agent di browser.
 
 ## Fitur
-- Ringkasan statistik harian
-- Pencarian agent berdasarkan ID, nama, wallet, atau notes
-- Filter status: All, Active, Pending, Alert
-- Tabel pantauan per agent lengkap
-- Data dummy siap dikembangkan ke backend / API
-- Desain responsif untuk desktop dan mobile
+- Data awal dimuat dari `agents.json`.
+- Tambah, edit, dan hapus agent lewat form.
+- Perubahan disimpan di `localStorage` browser, sehingga tetap ada saat halaman dimuat ulang di browser yang sama.
+- Ekspor data yang sedang aktif ke file `agents.json`.
+- Pencarian, filter status, dan ringkasan statistik.
 
-## Struktur project
-- `index.html` — layout dashboard
-- `styles.css` — styling dashboard
-- `app.js` — data dan interaksi UI
+> Data di `agents.json` adalah data contoh/dummy, bukan data real-time atau daftar resmi.
 
-## Jalankan
-Buka file `index.html` langsung di browser, atau jalankan server lokal:
+## Menjalankan
+Karena browser membatasi `fetch()` dari file lokal, jalankan melalui server lokal:
 
 ```bash
 python -m http.server 8000
 ```
 
-Lalu buka:
+Buka http://localhost:8000.
 
-```text
-http://localhost:8000
-```
+## Catatan penyimpanan
+CRUD saat ini hanya tersimpan di browser/perangkat yang digunakan. Tombol **Export JSON** mengunduh salinan terbaru; untuk membagikan perubahan ke semua pengguna atau menyimpannya secara permanen di server, perlu backend/API atau proses commit ke repositori.

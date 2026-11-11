@@ -1,147 +1,81 @@
-const agents = [
-  {
-    id: 'FA-1024',
-    name: 'Maya Rafi',
-    wallet: '0xA4D8...2201',
-    status: 'Active',
-    risk: 'Low',
-    trust: 94,
-    lastSync: '2 min ago',
-    notes: 'Stable sync and healthy latency'
-  },
-  {
-    id: 'FA-1031',
-    name: 'Nadya Chen',
-    wallet: '0xC11A...9E20',
-    status: 'Pending',
-    risk: 'Medium',
-    trust: 78,
-    lastSync: '14 min ago',
-    notes: 'Waiting for validation check'
-  },
-  {
-    id: 'FA-1045',
-    name: 'Rian Suryadi',
-    wallet: '0x71B2...EE89',
-    status: 'Alert',
-    risk: 'High',
-    trust: 52,
-    lastSync: '5 min ago',
-    notes: 'Repeated failed node heartbeat'
-  },
-  {
-    id: 'FA-1088',
-    name: 'Alya Putri',
-    wallet: '0x9EE4...AB42',
-    status: 'Active',
-    risk: 'Low',
-    trust: 97,
-    lastSync: '1 min ago',
-    notes: 'No critical events detected'
-  },
-  {
-    id: 'FA-1102',
-    name: 'Fahri Zain',
-    wallet: '0x5531...10FA',
-    status: 'Alert',
-    risk: 'Medium',
-    trust: 64,
-    lastSync: '9 min ago',
-    notes: 'Manual review required'
-  },
-  {
-    id: 'FA-1120',
-    name: 'Dina Karina',
-    wallet: '0xF097...87DB',
-    status: 'Active',
-    risk: 'Low',
-    trust: 90,
-    lastSync: '3 min ago',
-    notes: 'Rewards distribution normal'
-  },
-  {
-    id: 'FA-1139',
-    name: 'Bima Hadi',
-    wallet: '0x12AF...77B2',
-    status: 'Pending',
-    risk: 'Low',
-    trust: 81,
-    lastSync: '21 min ago',
-    notes: 'Awaiting second credential scan'
-  },
-  {
-    id: 'FA-1164',
-    name: 'Sinta Lestari',
-    wallet: '0xB708...9C40',
-    status: 'Active',
-    risk: 'Low',
-    trust: 96,
-    lastSync: '6 min ago',
-    notes: 'Strong compliance score'
-  }
-];
-
+const STORAGE_KEY = 'agentr am.agents.v1'.replace(' ', '');
 const statusFilters = ['All', 'Active', 'Pending', 'Alert'];
+let agents = [];
 let selectedStatus = 'All';
+let toastTimer;
+
+const $ = (selector) => document.querySelector(selector);
+
+function escapeHTML(value = '') {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[character]);
+}
+
+function validAgent(agent) {
+  return agent && typeof agent.id === 'string' && typeof agent.name === 'string' &&
+    ['Active', 'Pending', 'Alert'].includes(agent.status) &&
+    ['Low', 'Medium', 'High'].includes(agent.risk) &&
+    Number.isInteger(Number(agent.trust)) && Number(agent.trust) >= 0 && Number(agent.trust) <= 100;
+}
+
+function saveAgents() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(agents));
+  } catch (error) {
+    showToast('Tidak dapat menyimpan data di browser ini.');
+  }
+}
+
+async function loadAgents() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.every(validAgent)) return parsed;
+    }
+  } catch (error) {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  try {
+    const response = await fetch('./agents.json');
+    if (!response.ok) throw new Error('Gagal memuat agents.json');
+    const parsed = await response.json();
+    if (!Array.isArray(parsed) || !parsed.every(validAgent)) throw new Error('Format agents.json tidak valid');
+    return parsed;
+  } catch (error) {
+    showToast('Data JSON tidak termuat. Jalankan lewat server lokal (lihat README).');
+    return [];
+  }
+}
 
 function statusBadgeClass(status) {
-  if (status === 'Active') return 'green';
-  if (status === 'Pending') return 'yellow';
-  if (status === 'Alert') return 'red';
-  return 'blue';
+  return status === 'Active' ? 'green' : status === 'Pending' ? 'yellow' : 'red';
 }
 
 function riskBadgeClass(risk) {
-  if (risk === 'Low') return 'green';
-  if (risk === 'Medium') return 'yellow';
-  if (risk === 'High') return 'red';
-  return 'blue';
+  return risk === 'Low' ? 'green' : risk === 'Medium' ? 'yellow' : 'red';
 }
 
 function renderStats() {
-  const total = agents.length;
-  const active = agents.filter((agent) => agent.status === 'Active').length;
-  const pending = agents.filter((agent) => agent.status === 'Pending').length;
-  const alert = agents.filter((agent) => agent.status === 'Alert').length;
-
   const stats = [
-    { label: 'Total Agent', value: total, delta: '+12%' },
-    { label: 'Active', value: active, delta: '+8%' },
-    { label: 'Pending', value: pending, delta: '+3%' },
-    { label: 'Alert', value: alert, delta: '-2%' }
+    { label: 'Total Agent', value: agents.length },
+    { label: 'Active', value: agents.filter((agent) => agent.status === 'Active').length },
+    { label: 'Pending', value: agents.filter((agent) => agent.status === 'Pending').length },
+    { label: 'Alert', value: agents.filter((agent) => agent.status === 'Alert').length }
   ];
-
-  const statsGrid = document.getElementById('statsGrid');
-  statsGrid.innerHTML = stats
-    .map(
-      (stat) => `
-        <div class="stat-card">
-          <div class="label">
-            <span>${stat.label}</span>
-            <span>↗</span>
-          </div>
-          <div class="value">
-            <strong>${stat.value}</strong>
-            <small>${stat.delta}</small>
-          </div>
-        </div>
-      `
-    )
-    .join('');
+  $('#statsGrid').innerHTML = stats.map((stat) => `
+    <div class="stat-card"><div class="label"><span>${stat.label}</span><span>◈</span></div>
+    <div class="value"><strong>${stat.value}</strong><small>agents</small></div></div>
+  `).join('');
 }
 
 function renderFilters() {
-  const container = document.getElementById('statusFilters');
-  container.innerHTML = statusFilters
-    .map(
-      (status) => `
-        <button class="filter-chip ${selectedStatus === status ? 'active' : ''}" data-status="${status}">
-          ${status}
-        </button>
-      `
-    )
-    .join('');
-
+  const container = $('#statusFilters');
+  container.innerHTML = statusFilters.map((status) => `
+    <button class="filter-chip ${selectedStatus === status ? 'active' : ''}" type="button" data-status="${status}">${status}</button>
+  `).join('');
   container.querySelectorAll('.filter-chip').forEach((button) => {
     button.addEventListener('click', () => {
       selectedStatus = button.dataset.status;
@@ -152,63 +86,146 @@ function renderFilters() {
 }
 
 function renderTable() {
-  const searchValue = document.getElementById('searchInput').value.trim().toLowerCase();
-
+  const searchValue = $('#searchInput').value.trim().toLowerCase();
   const filteredAgents = agents.filter((agent) => {
     const matchesStatus = selectedStatus === 'All' || agent.status === selectedStatus;
-    const searchable = [agent.id, agent.name, agent.wallet, agent.notes, agent.status].join(' ').toLowerCase();
-    const matchesSearch = !searchValue || searchable.includes(searchValue);
-    return matchesStatus && matchesSearch;
+    const searchable = [agent.id, agent.name, agent.wallet, agent.notes, agent.status, agent.risk].join(' ').toLowerCase();
+    return matchesStatus && (!searchValue || searchable.includes(searchValue));
   });
 
-  const tableBody = document.getElementById('agentTableBody');
-  const resultCount = document.getElementById('resultCount');
-
-  resultCount.textContent = `${filteredAgents.length} results`;
-
-  if (filteredAgents.length === 0) {
-    tableBody.innerHTML = `
-      <tr>
-        <td colspan="9" class="empty-row">Tidak ada data yang cocok dengan filter saat ini.</td>
-      </tr>
-    `;
+  $('#resultCount').textContent = `${filteredAgents.length} hasil`;
+  const body = $('#agentTableBody');
+  if (!filteredAgents.length) {
+    body.innerHTML = '<tr><td colspan="9" class="empty-row">Tidak ada agent yang cocok.</td></tr>';
     return;
   }
 
-  tableBody.innerHTML = filteredAgents
-    .map(
-      (agent) => `
-        <tr>
-          <td><strong>${agent.id}</strong></td>
-          <td>${agent.name}</td>
-          <td>${agent.wallet}</td>
-          <td>
-            <span class="badge ${statusBadgeClass(agent.status)}">
-              <span class="status-dot" style="background:${agent.status === 'Active' ? '#22c55e' : agent.status === 'Pending' ? '#fbbf24' : '#f87171'}"></span>
-              ${agent.status}
-            </span>
-          </td>
-          <td>
-            <span class="badge ${riskBadgeClass(agent.risk)}">${agent.risk}</span>
-          </td>
-          <td>
-            <span class="badge ${agent.trust >= 85 ? 'green' : agent.trust >= 70 ? 'yellow' : 'blue'}">${agent.trust}%</span>
-          </td>
-          <td>${agent.lastSync}</td>
-          <td>${agent.notes}</td>
-          <td><button class="action-btn">View</button></td>
-        </tr>
-      `
-    )
-    .join('');
+  body.innerHTML = filteredAgents.map((agent) => `
+    <tr>
+      <td><strong>${escapeHTML(agent.id)}</strong></td>
+      <td>${escapeHTML(agent.name)}</td>
+      <td>${escapeHTML(agent.wallet || '—')}</td>
+      <td><span class="badge ${statusBadgeClass(agent.status)}"><span class="status-dot"></span>${escapeHTML(agent.status)}</span></td>
+      <td><span class="badge ${riskBadgeClass(agent.risk)}">${escapeHTML(agent.risk)}</span></td>
+      <td><span class="badge ${Number(agent.trust) >= 85 ? 'green' : Number(agent.trust) >= 70 ? 'yellow' : 'blue'}">${Number(agent.trust)}%</span></td>
+      <td>${escapeHTML(agent.lastSync || '—')}</td>
+      <td>${escapeHTML(agent.notes || '—')}</td>
+      <td class="row-actions">
+        <button class="action-btn" type="button" data-action="edit" data-id="${escapeHTML(agent.id)}">Edit</button>
+        <button class="action-btn danger-btn" type="button" data-action="delete" data-id="${escapeHTML(agent.id)}">Hapus</button>
+      </td>
+    </tr>
+  `).join('');
 }
 
-function init() {
+function refreshDashboard() {
   renderStats();
   renderFilters();
   renderTable();
+}
 
-  document.getElementById('searchInput').addEventListener('input', renderTable);
+function openDialog(agent) {
+  const form = $('#agentForm');
+  form.reset();
+  $('#originalId').value = agent?.id || '';
+  $('#dialogTitle').textContent = agent ? 'Edit Agent' : 'Tambah Agent';
+  $('#agentId').value = agent?.id || '';
+  $('#agentId').readOnly = Boolean(agent);
+  $('#agentName').value = agent?.name || '';
+  $('#agentWallet').value = agent?.wallet || '';
+  $('#agentStatus').value = agent?.status || 'Active';
+  $('#agentRisk').value = agent?.risk || 'Low';
+  $('#agentTrust').value = agent?.trust ?? 80;
+  $('#agentLastSync').value = agent?.lastSync || '';
+  $('#agentNotes').value = agent?.notes || '';
+  $('#agentDialog').showModal();
+  $('#agentId').focus();
+}
+
+function showToast(message) {
+  const toast = $('#toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), 3000);
+}
+
+function exportJSON() {
+  const blob = new Blob([`${JSON.stringify(agents, null, 2)}\n`], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'agents.json';
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('Data agent diekspor sebagai JSON.');
+}
+
+function handleSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const originalId = $('#originalId').value;
+  const id = formData.get('id').trim();
+  const duplicate = agents.some((agent) => agent.id.toLowerCase() === id.toLowerCase() && agent.id !== originalId);
+  if (duplicate) {
+    $('#agentId').setCustomValidity('Agent ID sudah digunakan.');
+    $('#agentId').reportValidity();
+    $('#agentId').setCustomValidity('');
+    return;
+  }
+
+  const agent = {
+    id,
+    name: formData.get('name').trim(),
+    wallet: formData.get('wallet').trim(),
+    status: formData.get('status'),
+    risk: formData.get('risk'),
+    trust: Number(formData.get('trust')),
+    lastSync: formData.get('lastSync').trim() || 'Baru saja',
+    notes: formData.get('notes').trim()
+  };
+
+  if (originalId) {
+    agents = agents.map((item) => item.id === originalId ? agent : item);
+    showToast('Data agent berhasil diperbarui.');
+  } else {
+    agents.unshift(agent);
+    showToast('Agent berhasil ditambahkan.');
+  }
+  saveAgents();
+  refreshDashboard();
+  $('#agentDialog').close();
+}
+
+function handleTableAction(event) {
+  const button = event.target.closest('button[data-action]');
+  if (!button) return;
+  const agent = agents.find((item) => item.id === button.dataset.id);
+  if (!agent) return;
+  if (button.dataset.action === 'edit') {
+    openDialog(agent);
+  } else if (button.dataset.action === 'delete' && confirm(`Hapus agent ${agent.id}?`)) {
+    agents = agents.filter((item) => item.id !== agent.id);
+    saveAgents();
+    refreshDashboard();
+    showToast('Agent berhasil dihapus.');
+  }
+}
+
+async function init() {
+  agents = await loadAgents();
+  refreshDashboard();
+  $('#searchInput').addEventListener('input', renderTable);
+  $('#addAgentButton').addEventListener('click', () => openDialog());
+  $('#exportButton').addEventListener('click', exportJSON);
+  $('#agentForm').addEventListener('submit', handleSubmit);
+  $('#agentTableBody').addEventListener('click', handleTableAction);
+  $('#closeDialogButton').addEventListener('click', () => $('#agentDialog').close());
+  $('#cancelDialogButton').addEventListener('click', () => $('#agentDialog').close());
+  $('#agentDialog').addEventListener('click', (event) => {
+    if (event.target === $('#agentDialog')) $('#agentDialog').close();
+  });
 }
 
 init();

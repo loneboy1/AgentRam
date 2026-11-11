@@ -42,8 +42,8 @@
             <h2>Freemint Agent Monitoring</h2>
           </div>
           <div class="topbar-actions">
-            <button class="secondary-btn">Export</button>
-            <button class="primary-btn">Add Agent</button>
+            <button class="secondary-btn" id="exportButton" type="button">Export JSON</button>
+            <button class="primary-btn" id="addAgentButton" type="button">+ Tambah Agent</button>
           </div>
         </header>
 
@@ -56,10 +56,9 @@
               <h3>Agent Registry</h3>
             </div>
             <div class="search-box">
-              <input id="searchInput" type="text" placeholder="Cari ID, nama, wallet, notes..." />
+              <input id="searchInput" type="search" placeholder="Cari ID, nama, wallet, notes..." aria-label="Cari agent" />
             </div>
           </div>
-
           <div class="filter-row" id="statusFilters"></div>
         </section>
 
@@ -71,20 +70,12 @@
             </div>
             <span id="resultCount" class="result-badge">0 results</span>
           </div>
-
           <div class="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th>Agent ID</th>
-                  <th>Nama</th>
-                  <th>Wallet</th>
-                  <th>Status</th>
-                  <th>Risk</th>
-                  <th>Trust</th>
-                  <th>Last Sync</th>
-                  <th>Notes</th>
-                  <th>Action</th>
+                  <th>Agent ID</th><th>Nama</th><th>Wallet</th><th>Status</th><th>Risk</th>
+                  <th>Trust</th><th>Last Sync</th><th>Notes</th><th>Action</th>
                 </tr>
               </thead>
               <tbody id="agentTableBody"></tbody>
@@ -94,6 +85,34 @@
       </main>
     </div>
 
+    <dialog id="agentDialog" class="agent-dialog" aria-labelledby="dialogTitle">
+      <form id="agentForm">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">Agent Registry</p>
+            <h2 id="dialogTitle">Tambah Agent</h2>
+          </div>
+          <button class="icon-btn" type="button" id="closeDialogButton" aria-label="Tutup">×</button>
+        </div>
+        <input id="originalId" type="hidden" />
+        <div class="form-grid">
+          <label>Agent ID<input id="agentId" name="id" required maxlength="40" placeholder="FA-1200" /></label>
+          <label>Nama<input id="agentName" name="name" required maxlength="100" placeholder="Nama agent" /></label>
+          <label>Wallet<input id="agentWallet" name="wallet" maxlength="120" placeholder="Alamat wallet" /></label>
+          <label>Status<select id="agentStatus" name="status"><option>Active</option><option>Pending</option><option>Alert</option></select></label>
+          <label>Risk<select id="agentRisk" name="risk"><option>Low</option><option>Medium</option><option>High</option></select></label>
+          <label>Trust (0–100)<input id="agentTrust" name="trust" type="number" min="0" max="100" value="80" required /></label>
+          <label>Last Sync<input id="agentLastSync" name="lastSync" maxlength="80" placeholder="Baru saja" /></label>
+          <label class="full-width">Notes<textarea id="agentNotes" name="notes" rows="3" maxlength="500" placeholder="Catatan pantauan"></textarea></label>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary-btn" type="button" id="cancelDialogButton">Batal</button>
+          <button class="primary-btn" type="submit">Simpan Agent</button>
+        </div>
+      </form>
+    </dialog>
+
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
     <script src="app.js"></script>
   </body>
 </html>
