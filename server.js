@@ -2,746 +2,398 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const dns = require('dns').promises;
+const net = require('net');
 const { URL } = require('url');
 
-const PORT = 3000;
-const DATA_FILE = path.join(__dirname, 'data', 'agents.json');
-const USERS_FILE = path.join(__dirname, 'data', 'users.json');
-const WATCHLIST_FILE = path.join(__dirname, 'data', 'watchlist.json');
+const PORT = Number(process.env.PORT || 3000);
+const DATA_DIR = path.join(__dirname, 'data');
+const DATA_FILE = path.join(DATA_DIR, 'agents.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const WATCHLIST_FILE = path.join(DATA_DIR, 'watchlist.json');
+const EVENTS_FILE = path.join(DATA_DIR, 'watchlist-events.json');
 const sessions = new Map();
+const MAX_BODY_BYTES = 1024 * 1024;
 
 const BNB_NETWORKS = {
-  'bsc-mainnet': {
-    name: 'bsc-mainnet',
-    chainId: 56,
-    registryContract: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432',
-    scanApi: 'https://www.8004scan.io/api/v1'
-  },
-  'bsc-testnet': {
-    name: 'bsc-testnet',
-    chainId: 97,
-    registryContract: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
-    scanApi: 'https://www.8004scan.io/api/v1'
-  }
+  'bsc-mainnet': { name: 'bsc-mainnet', chainId: 56, registryContract: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432', scanApi: 'https://www.8004scan.io/api/v1' },
+  'bsc-testnet': { name: 'bsc-testnet', chainId: 97, registryContract: '0x8004A818BFB912233c491871b3d84c89A494BD9e', scanApi: 'https://www.8004scan.io/api/v1' }
 };
 
-function ensureJsonFile(filePath, defaultData) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, JSON.stringify(defaultData, null, 2));
-  }
+function ensureFile(file, initial) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify(initial, null, 2));
 }
-
-function ensureSeedData() {
-  ensureJsonFile(DATA_FILE, [
-    {
-      id: 'FA-1024',
-      name: 'Maya Rafi',
-      wallet: '0xA4D8...2201',
-      status: 'Active',
-      risk: 'Low',
-      trust: 94,
-      lastSync: '2 min ago',
-      notes: 'Stable sync and healthy latency'
-    },
-    {
-      id: 'FA-1031',
-      name: 'Nadya Chen',
-      wallet: '0xC11A...9E20',
-      status: 'Pending',
-      risk: 'Medium',
-      trust: 78,
-      lastSync: '14 min ago',
-      notes: 'Waiting for validation check'
-    },
-    {
-      id: 'FA-1045',
-      name: 'Rian Suryadi',
-      wallet: '0x71B2...EE89',
-      status: 'Alert',
-      risk: 'High',
-      trust: 52,
-      lastSync: '5 min ago',
-      notes: 'Repeated failed node heartbeat'
-    }
-  ]);
-
-  ensureJsonFile(USERS_FILE, [
-    { username: 'admin', password: 'admin123', role: 'admin' }
-  ]);
-
-  ensureJsonFile(WATCHLIST_FILE, [
-    {
-      id: 'watch-01',
-      name: 'Astra Labs',
-      agentId: 'AG-2048',
-      category: 'Launch',
-      sourceType: 'website',
-      sourceUrl: 'https://example.com/astra',
-      status: 'Monitoring',
-      risk: 'Medium',
-      platform: 'BNB',
-      lastSeen: '2 hours ago',
-      tags: ['launch', 'agent', 'reward'],
-      notes: 'New public launch and wallet-linked campaign.',
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 'watch-02',
-      name: 'Miro Nexus',
-      agentId: 'AG-4401',
-      category: 'Campaign',
-      sourceType: 'x',
-      sourceUrl: 'https://x.com/miro',
-      status: 'Needs Review',
-      risk: 'High',
-      platform: 'BNB',
-      lastSeen: '5 hours ago',
-      tags: ['freemint', 'campaign'],
-      notes: 'Freemint claim social signal appears active.',
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 'watch-03',
-      name: 'VoltMind AI',
-      agentId: 'AG-9802',
-      category: 'Reward',
-      sourceType: 'docs',
-      sourceUrl: 'https://docs.example.com/voltmind',
-      status: 'Verified',
-      risk: 'Low',
-      platform: 'Ethereum',
-      lastSeen: '1 day ago',
-      tags: ['reward', 'claim'],
-      notes: 'Official docs list reward distribution pipeline.',
-      updatedAt: new Date().toISOString()
-    }
-  ]);
+function ensureData() {
+  ensureFile(DATA_FILE, []);
+  ensureFile(USERS_FILE, [{ username: 'admin', password: 'admin123', role: 'admin' }]);
+  ensureFile(WATCHLIST_FILE, []);
+  ensureFile(EVENTS_FILE, []);
 }
-
-function readJson(filePath) {
-  ensureSeedData();
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+function readJson(file) {
+  ensureData();
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
-
-function writeJson(filePath, data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+function writeJson(file, value) {
+  ensureData();
+  const tempFile = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tempFile, JSON.stringify(value, null, 2));
+  fs.renameSync(tempFile, file);
 }
-
-function readAgents() {
-  return readJson(DATA_FILE);
-}
-
-function writeAgents(data) {
-  writeJson(DATA_FILE, data);
-}
-
-function normalizeWatchlistTags(value) {
-  if (Array.isArray(value)) return value.map((tag) => String(tag).trim()).filter(Boolean);
-  if (typeof value === 'string') {
-    return value.split(',').map((tag) => tag.trim()).filter(Boolean);
-  }
-  return [];
-}
-
-function normalizeWatchlistItem(item = {}) {
-  return {
-    id: item.id || `watch-${Date.now()}`,
-    name: item.name || 'Unnamed Project',
-    agentId: item.agentId || '',
-    category: item.category || 'General',
-    sourceType: item.sourceType || 'website',
-    sourceUrl: item.sourceUrl || '',
-    status: item.status || 'Monitoring',
-    risk: item.risk || 'Medium',
-    platform: item.platform || 'BNB',
-    lastSeen: item.lastSeen || 'Recently',
-    tags: normalizeWatchlistTags(item.tags),
-    notes: item.notes || '',
-    sourceMeta: item.sourceMeta || null,
-    updatedAt: item.updatedAt || new Date().toISOString()
-  };
-}
-
-function readWatchlist() {
-  return readJson(WATCHLIST_FILE).map(normalizeWatchlistItem);
-}
-
-function writeWatchlist(data) {
-  writeJson(WATCHLIST_FILE, data.map(normalizeWatchlistItem));
-}
-
-function getUserFromDb(username, password) {
-  const users = readJson(USERS_FILE);
-  return users.find((user) => user.username === username && user.password === password) || null;
-}
-
-function createSession(username) {
-  const token = crypto.randomBytes(24).toString('hex');
-  sessions.set(token, { username, createdAt: Date.now() });
-  return token;
-}
-
-function getSessionFromRequest(req) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  return sessions.get(token) || null;
-}
-
-function sendJson(res, statusCode, data) {
-  res.writeHead(statusCode, {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
+function sendJson(res, status, data) {
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization'
   });
-  res.end(JSON.stringify(data, null, 2));
+  res.end(JSON.stringify(data));
 }
-
 function parseBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', (chunk) => {
       body += chunk;
+      if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
+        reject(new Error('Payload too large'));
+        req.destroy();
+      }
     });
     req.on('end', () => {
       if (!body) return resolve({});
-      try {
-        resolve(JSON.parse(body));
-      } catch (error) {
-        reject(new Error('Invalid JSON payload'));
-      }
+      try { resolve(JSON.parse(body)); } catch { reject(new Error('Invalid JSON payload')); }
     });
+    req.on('error', reject);
   });
 }
-
-function decodeAgentUri(agentUri) {
-  if (!agentUri || typeof agentUri !== 'string') return null;
-
-  try {
-    if (agentUri.startsWith('data:application/json;base64,')) {
-      const base64 = agentUri.replace(/^data:application\/json;base64,/i, '');
-      const decoded = Buffer.from(base64, 'base64').toString('utf8');
-      return JSON.parse(decoded);
-    }
-    if (agentUri.startsWith('http://') || agentUri.startsWith('https://')) {
-      return null;
-    }
-  } catch (error) {
-    return null;
-  }
-
-  return null;
+function getSession(req) {
+  const authorization = req.headers.authorization || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  return sessions.get(token) || null;
 }
-
+function requireSession(req, res) {
+  if (getSession(req)) return true;
+  sendJson(res, 401, { message: 'Unauthorized' });
+  return false;
+}
+function normalizeTags(value) {
+  if (Array.isArray(value)) return value.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 30);
+  return typeof value === 'string' ? value.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 30) : [];
+}
+function normalizeWatchlistItem(item = {}) {
+  return {
+    id: String(item.id || `watch-${crypto.randomUUID()}`),
+    name: String(item.name || 'Unnamed Project').slice(0, 160),
+    agentId: String(item.agentId || '').slice(0, 120),
+    category: String(item.category || 'General').slice(0, 80),
+    sourceType: String(item.sourceType || 'website').slice(0, 40),
+    sourceUrl: String(item.sourceUrl || '').slice(0, 2048),
+    status: ['Monitoring', 'Needs Review', 'Verified', 'Deprecated'].includes(item.status) ? item.status : 'Monitoring',
+    risk: ['Low', 'Medium', 'High'].includes(item.risk) ? item.risk : 'Medium',
+    platform: String(item.platform || 'Other').slice(0, 60),
+    lastSeen: item.lastSeen || null,
+    lastCheckedAt: item.lastCheckedAt || null,
+    tags: normalizeTags(item.tags),
+    notes: String(item.notes || '').slice(0, 4000),
+    sourceMeta: item.sourceMeta || null,
+    score: Number.isFinite(Number(item.score)) ? Number(item.score) : 0,
+    updatedAt: item.updatedAt || new Date().toISOString()
+  };
+}
+function readWatchlist() {
+  return readJson(WATCHLIST_FILE).map(normalizeWatchlistItem);
+}
+function writeWatchlist(items) {
+  writeJson(WATCHLIST_FILE, items.map(normalizeWatchlistItem));
+}
+function addEvent(projectId, type, message, source = 'system', details = {}) {
+  const events = readJson(EVENTS_FILE);
+  const event = { id: crypto.randomUUID(), projectId, type, message: String(message).slice(0, 500), source, details, createdAt: new Date().toISOString() };
+  events.unshift(event);
+  writeJson(EVENTS_FILE, events.slice(0, 5000));
+  return event;
+}
+function riskPoints(risk) { return ({ Low: 10, Medium: 6, High: 2 })[risk] || 5; }
+function computeScore(item) {
+  const status = ({ Verified: 25, Monitoring: 18, 'Needs Review': 10, Deprecated: 0 })[item.status] ?? 10;
+  const categories = ({ Launch: 18, Campaign: 16, Freemint: 14, Reward: 13, Claim: 12, Partner: 10, General: 8 });
+  const sourceBonus = item.sourceMeta ? 10 : 0;
+  const agentIdBonus = item.agentId ? 8 : 0;
+  const tagBonus = Math.min((item.tags || []).length * 2, 12);
+  return Math.max(0, Math.min(100, status + riskPoints(item.risk) + (categories[item.category] || 8) + sourceBonus + agentIdBonus + tagBonus));
+}
+function scoreLabel(score) {
+  if (score >= 80) return 'Strong signal';
+  if (score >= 60) return 'Watching';
+  if (score >= 40) return 'Review';
+  return 'Low priority';
+}
+function isPrivateAddress(address) {
+  if (net.isIPv4(address)) {
+    const [a, b] = address.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+  }
+  if (net.isIPv6(address)) {
+    const normalized = address.toLowerCase();
+    return normalized === '::' || normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb') || normalized.startsWith('::ffff:127.') || normalized.startsWith('::ffff:10.') || normalized.startsWith('::ffff:192.168.');
+  }
+  return true;
+}
+async function validatePublicHttpsUrl(rawUrl) {
+  let url;
+  try { url = new URL(rawUrl); } catch { throw new Error('Source URL is invalid'); }
+  if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Only public HTTPS source URLs are allowed');
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local')) throw new Error('Local network sources are not allowed');
+  if (net.isIP(hostname)) {
+    if (isPrivateAddress(hostname)) throw new Error('Private or reserved IP addresses are not allowed');
+  } else {
+    const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+    if (!addresses.length || addresses.some(({ address }) => isPrivateAddress(address))) throw new Error('Source host resolves to a private or reserved address');
+  }
+  return url;
+}
+async function fetchPublicPageSummary(rawUrl) {
+  let url;
+  try { url = await validatePublicHttpsUrl(rawUrl); } catch (error) { return { error: error.message }; }
+  try {
+    const response = await fetch(url, {
+      redirect: 'manual',
+      headers: { 'User-Agent': 'AgentRam-Monitor/1.0', Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
+      signal: AbortSignal.timeout(12000)
+    });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) return { error: 'Source redirected without a location' };
+      const redirectUrl = new URL(location, url);
+      if (redirectUrl.hostname !== url.hostname) return { error: 'Cross-host redirects are not followed; save the final public URL' };
+      const checked = await validatePublicHttpsUrl(redirectUrl.toString());
+      const redirected = await fetch(checked, { redirect: 'manual', headers: { 'User-Agent': 'AgentRam-Monitor/1.0', Accept: 'text/html,application/xhtml+xml' }, signal: AbortSignal.timeout(12000) });
+      if (!redirected.ok) return { error: `Source returned HTTP ${redirected.status}` };
+      return parsePageResponse(redirected, checked.toString());
+    }
+    if (!response.ok) return { error: `Source returned HTTP ${response.status}` };
+    return parsePageResponse(response, url.toString());
+  } catch (error) {
+    return { error: error.name === 'TimeoutError' ? 'Source request timed out' : 'Could not fetch source' };
+  }
+}
+async function parsePageResponse(response, url) {
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml')) return { error: 'Source is not an HTML page' };
+  const html = (await response.text()).slice(0, 2_000_000);
+  const getMeta = (pattern) => html.match(pattern)?.[1]?.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim() || '';
+  const title = getMeta(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["'][^>]*>/i) || getMeta(/<title[^>]*>(.*?)<\/title>/is);
+  const description = getMeta(/<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]+content=["']([^"']*)["'][^>]*>/i);
+  return { title: title.slice(0, 300), description: description.slice(0, 1200), url, checkedAt: new Date().toISOString() };
+}
+async function syncOne(itemId) {
+  const list = readWatchlist();
+  const index = list.findIndex((entry) => entry.id === itemId);
+  if (index < 0) return null;
+  const item = list[index];
+  const previous = item.sourceMeta;
+  if (!item.sourceUrl) {
+    item.lastCheckedAt = new Date().toISOString();
+    addEvent(item.id, 'sync_failed', 'No source URL configured', item.sourceType);
+  } else {
+    const result = await fetchPublicPageSummary(item.sourceUrl);
+    item.lastCheckedAt = new Date().toISOString();
+    if (result?.error) {
+      addEvent(item.id, 'sync_failed', result.error, item.sourceType, { url: item.sourceUrl });
+      item.sourceError = result.error;
+    } else {
+      const changed = !previous || previous.title !== result.title || previous.description !== result.description;
+      item.sourceMeta = result;
+      item.lastSeen = result.checkedAt;
+      delete item.sourceError;
+      if (changed) addEvent(item.id, previous ? 'source_changed' : 'source_discovered', previous ? 'Public source metadata changed' : 'Public source metadata discovered', item.sourceType, { url: result.url, title: result.title });
+      else addEvent(item.id, 'source_checked', 'Public source checked; no metadata change', item.sourceType, { url: result.url });
+    }
+  }
+  item.score = computeScore(item);
+  item.updatedAt = new Date().toISOString();
+  list[index] = item;
+  writeWatchlist(list);
+  return item;
+}
+async function syncAll() {
+  const snapshot = readWatchlist();
+  const results = [];
+  for (const item of snapshot) {
+    try {
+      const updated = await syncOne(item.id);
+      results.push({ id: item.id, ok: Boolean(updated && !updated.sourceError), error: updated?.sourceError || null });
+    } catch (error) {
+      results.push({ id: item.id, ok: false, error: 'Sync failed' });
+    }
+  }
+  return { total: results.length, synced: results.filter((result) => result.ok).length, failed: results.filter((result) => !result.ok).length, items: results };
+}
+function getAlerts() {
+  const items = readWatchlist();
+  const alerts = [];
+  for (const item of items) {
+    const score = computeScore(item);
+    if (item.status === 'Needs Review') alerts.push({ id: `status-${item.id}`, projectId: item.id, level: 'warning', type: 'review', message: `${item.name}: needs review`, createdAt: item.updatedAt });
+    if (item.risk === 'High') alerts.push({ id: `risk-${item.id}`, projectId: item.id, level: 'high', type: 'risk', message: `${item.name}: high risk is marked`, createdAt: item.updatedAt });
+    if (item.sourceError) alerts.push({ id: `source-${item.id}`, projectId: item.id, level: 'warning', type: 'source_error', message: `${item.name}: ${item.sourceError}`, createdAt: item.lastCheckedAt || item.updatedAt });
+    if (score >= 80) alerts.push({ id: `signal-${item.id}`, projectId: item.id, level: 'info', type: 'signal', message: `${item.name}: strong watchlist signal (score ${score})`, createdAt: item.updatedAt });
+  }
+  const events = readJson(EVENTS_FILE).filter((event) => ['source_changed', 'source_discovered', 'status_changed'].includes(event.type)).slice(0, 100);
+  for (const event of events) alerts.push({ id: event.id, projectId: event.projectId, level: 'info', type: event.type, message: event.message, createdAt: event.createdAt });
+  return alerts.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 200);
+}
 function normalizeAgentLookup(item) {
   const tokenId = item?.token_id ?? item?.agentId ?? item?.id ?? null;
   const ownerAddress = item?.owner_address ?? item?.ownerAddress ?? '';
   const agentUri = item?.agent_uri ?? item?.agentUri ?? '';
-  const name = item?.name ?? '';
-  const description = item?.description ?? '';
-  const decodedAgentUri = decodeAgentUri(agentUri);
-  const textBlob = [
-    name,
-    description,
-    ownerAddress,
-    agentUri,
-    decodedAgentUri ? JSON.stringify(decodedAgentUri) : '',
-    Array.isArray(item?.services) ? item.services.map((svc) => JSON.stringify(svc)).join(' ') : ''
-  ].join(' ').toLowerCase();
-
-  const freemintCandidate = /(freemint|free[-\s]?mint|minting|launchpad|campaign)/i.test(textBlob);
-
-  return {
-    agentId: tokenId !== null && tokenId !== undefined ? Number(tokenId) : null,
-    name,
-    ownerAddress,
-    network: item?.network || 'bsc-mainnet',
-    registryContract: item?.registryContract || item?.registry_contract || '',
-    agentUri,
-    decodedAgentUri,
-    freemintCandidate,
-    description,
-    source: '8004scan indexer',
-    raw: item
-  };
+  return { agentId: tokenId !== null ? Number(tokenId) : null, name: item?.name || '', ownerAddress, agentUri, description: item?.description || '', network: item?.network || 'bsc-mainnet', registryContract: item?.registry_contract || '', source: '8004scan indexer', raw: item };
 }
-
-async function fetchPublicPageSummary(url) {
-  if (!url || typeof url !== 'string') return null;
-
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 AgentRam Monitor',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-      },
-      signal: AbortSignal.timeout(15000)
-    });
-
-    if (!response.ok) return null;
-
-    const html = await response.text();
-    const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is);
-    const metaDescription = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["'][^>]*>/is) ||
-      html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/is);
-    const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/is);
-
-    return {
-      title: (ogTitle?.[1] || titleMatch?.[1] || '').replace(/\s+/g, ' ').trim(),
-      description: (metaDescription?.[1] || '').replace(/\s+/g, ' ').trim(),
-      url
-    };
-  } catch (error) {
-    return null;
-  }
-}
-
-function computeWatchlistScore(item) {
-  const riskWeight = { Low: 10, Medium: 6, High: 3 };
-  const statusWeight = { Verified: 25, Monitoring: 18, 'Needs Review': 12, Deprecated: 5 };
-  const categoryWeight = { Launch: 18, Campaign: 16, Freemint: 15, Reward: 14, Claim: 12, Partner: 10, General: 8 };
-  const sourceBonus = item.sourceMeta ? 10 : 0;
-  const tagBonus = Math.min((item.tags || []).length * 2, 12);
-
-  return Math.min(
-    100,
-    (statusWeight[item.status] || 10) +
-      (riskWeight[item.risk] || 6) +
-      (categoryWeight[item.category] || 8) +
-      sourceBonus +
-      tagBonus
-  );
-}
-
-async function syncWatchlistItemById(itemId) {
-  const list = readWatchlist();
-  const index = list.findIndex((entry) => entry.id === itemId);
-  if (index === -1) return null;
-
-  const item = list[index];
-  if (!item.sourceUrl) return item;
-
-  const summary = await fetchPublicPageSummary(item.sourceUrl);
-  const updatedItem = {
-    ...item,
-    sourceMeta: summary || item.sourceMeta || null,
-    notes: item.notes || summary?.description || `Source updated from ${item.sourceType}`,
-    lastSeen: 'Just now',
-    updatedAt: new Date().toISOString(),
-    score: computeWatchlistScore({ ...item, sourceMeta: summary || item.sourceMeta || null })
-  };
-
-  list[index] = updatedItem;
-  writeWatchlist(list);
-  return updatedItem;
-}
-
-async function syncWatchlistSources() {
-  const list = readWatchlist();
-  const syncResults = [];
-
-  for (const item of list) {
-    if (!item.sourceUrl) {
-      syncResults.push({ id: item.id, ok: false, reason: 'No source URL' });
-      continue;
-    }
-
-    const summary = await fetchPublicPageSummary(item.sourceUrl);
-    if (!summary) {
-      syncResults.push({ id: item.id, ok: false, reason: 'Source unreachable' });
-      continue;
-    }
-
-    const updatedItem = {
-      ...item,
-      sourceMeta: summary,
-      notes: item.notes || summary.description || `Source updated from ${item.sourceType}`,
-      lastSeen: 'Just now',
-      updatedAt: new Date().toISOString(),
-      score: computeWatchlistScore({ ...item, sourceMeta: summary })
-    };
-
-    const index = list.findIndex((entry) => entry.id === item.id);
-    if (index !== -1) {
-      list[index] = updatedItem;
-    }
-
-    syncResults.push({ id: item.id, ok: true, title: summary.title || item.name, score: updatedItem.score });
-  }
-
-  writeWatchlist(list);
-  return {
-    synced: syncResults.filter((item) => item.ok).length,
-    total: list.length,
-    items: syncResults
-  };
-}
-
-async function fetchBnbAgents(networkName = 'bsc-mainnet') {
-  const network = BNB_NETWORKS[networkName] || BNB_NETWORKS['bsc-mainnet'];
-  const url = new URL(`${network.scanApi}/agents`);
-  url.searchParams.set('chain_id', String(network.chainId));
+async function lookupBnbAgent({ agentId, wallet, name, network = 'bsc-mainnet' }) {
+  const config = BNB_NETWORKS[network] || BNB_NETWORKS['bsc-mainnet'];
+  const url = new URL(`${config.scanApi}/agents`);
+  url.searchParams.set('chain_id', String(config.chainId));
   url.searchParams.set('limit', '100');
   url.searchParams.set('offset', '0');
-
-  const response = await fetch(url.toString(), {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(30000)
-  });
-
-  if (!response.ok) {
-    throw new Error(`8004scan API request failed: ${response.status} ${response.statusText}`);
-  }
-
+  const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20000) });
+  if (!response.ok) throw new Error(`8004scan API request failed: ${response.status}`);
   const data = await response.json();
-  const items = Array.isArray(data?.items) ? data.items : [];
-
-  return {
-    network: network.name,
-    registryContract: network.registryContract,
-    total: Number(data?.total ?? items.length ?? 0),
-    items: items.map(normalizeAgentLookup)
-  };
-}
-
-async function lookupBnbAgent({ agentId, wallet, name, network = 'bsc-mainnet' }) {
-  const networkName = BNB_NETWORKS[network] ? network : 'bsc-mainnet';
-  const { items, total, registryContract } = await fetchBnbAgents(networkName);
-
-  let filtered = items;
-
-  if (agentId !== undefined && agentId !== null && agentId !== '') {
-    filtered = filtered.filter((item) => String(item.agentId) === String(agentId));
-  }
-
-  if (wallet) {
-    filtered = filtered.filter((item) => String(item.ownerAddress || '').toLowerCase() === wallet.toLowerCase());
-  }
-
-  if (name) {
-    filtered = filtered.filter((item) => String(item.name || '').toLowerCase().includes(name.toLowerCase()));
-  }
-
-  return {
-    network: networkName,
-    registryContract,
-    total,
-    matched: filtered.length,
-    results: filtered.slice(0, 25),
-    source: '8004scan indexer'
-  };
+  let items = (Array.isArray(data?.items) ? data.items : []).map(normalizeAgentLookup);
+  if (agentId) items = items.filter((item) => String(item.agentId) === String(agentId));
+  if (wallet) items = items.filter((item) => item.ownerAddress.toLowerCase() === wallet.toLowerCase());
+  if (name) items = items.filter((item) => item.name.toLowerCase().includes(name.toLowerCase()));
+  return { network: config.name, registryContract: config.registryContract, total: Number(data?.total ?? items.length), matched: items.length, results: items.slice(0, 25), source: '8004scan indexer' };
 }
 
 const server = http.createServer(async (req, res) => {
-  const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+  let url;
+  try { url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); } catch { sendJson(res, 400, { message: 'Invalid URL' }); return; }
+  if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' }); res.end(); return; }
+  if (url.pathname === '/api/health') { sendJson(res, 200, { ok: true, service: 'AgentRam API' }); return; }
 
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-    });
-    res.end();
-    return;
-  }
-
-  if (parsedUrl.pathname === '/api/health') {
-    sendJson(res, 200, { ok: true, service: 'AgentRam API' });
-    return;
-  }
-
-  if (parsedUrl.pathname === '/api/login') {
-    if (req.method !== 'POST') {
-      sendJson(res, 405, { message: 'Method not allowed' });
-      return;
-    }
-
+  if (url.pathname === '/api/login' && req.method === 'POST') {
     try {
       const body = await parseBody(req);
-      const user = getUserFromDb(body.username || '', body.password || '');
-      if (!user) {
-        sendJson(res, 401, { message: 'Username atau password salah.' });
-        return;
-      }
-
-      const token = createSession(user.username);
-      sendJson(res, 200, {
-        token,
-        user: { username: user.username, role: user.role }
-      });
-      return;
-    } catch (error) {
-      sendJson(res, 400, { message: error.message || 'Invalid payload' });
-      return;
-    }
-  }
-
-  if (parsedUrl.pathname === '/api/me') {
-    if (req.method !== 'GET') {
-      sendJson(res, 405, { message: 'Method not allowed' });
-      return;
-    }
-
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
-    sendJson(res, 200, { username: session.username, role: 'admin' });
+      const user = readJson(USERS_FILE).find((candidate) => candidate.username === body.username && candidate.password === body.password);
+      if (!user) { sendJson(res, 401, { message: 'Username atau password salah.' }); return; }
+      const token = crypto.randomBytes(24).toString('hex');
+      sessions.set(token, { username: user.username, createdAt: Date.now() });
+      sendJson(res, 200, { token, user: { username: user.username, role: user.role || 'admin' } });
+    } catch (error) { sendJson(res, 400, { message: error.message }); }
     return;
   }
-
-  if (parsedUrl.pathname === '/api/agents') {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
-    if (req.method === 'GET') {
-      sendJson(res, 200, readAgents());
-      return;
-    }
-
-    if (req.method === 'POST') {
-      try {
-        const payload = await parseBody(req);
-        const agents = readAgents();
-        const existing = agents.find((agent) => agent.id === payload.id);
-        if (existing) {
-          sendJson(res, 409, { message: 'Agent ID already exists' });
-          return;
-        }
-        agents.unshift(payload);
-        writeAgents(agents);
-        sendJson(res, 201, payload);
-      } catch (error) {
-        sendJson(res, 400, { message: error.message || 'Invalid JSON payload' });
-      }
-      return;
-    }
-
-    if (req.method === 'PUT') {
-      try {
-        const payload = await parseBody(req);
-        const agents = readAgents();
-        const index = agents.findIndex((agent) => agent.id === payload.id);
-        if (index === -1) {
-          sendJson(res, 404, { message: 'Agent not found' });
-          return;
-        }
-
-        agents[index] = { ...agents[index], ...payload };
-        writeAgents(agents);
-        sendJson(res, 200, agents[index]);
-      } catch (error) {
-        sendJson(res, 400, { message: error.message || 'Invalid JSON payload' });
-      }
-      return;
-    }
-
-    if (req.method === 'DELETE') {
-      const id = parsedUrl.searchParams.get('id');
-      if (!id) {
-        sendJson(res, 400, { message: 'Missing id' });
-        return;
-      }
-
-      const agents = readAgents();
-      const filtered = agents.filter((agent) => agent.id !== id);
-      if (filtered.length === agents.length) {
-        sendJson(res, 404, { message: 'Agent not found' });
-        return;
-      }
-
-      writeAgents(filtered);
-      sendJson(res, 200, { message: 'Agent deleted successfully' });
-      return;
-    }
+  if (url.pathname === '/api/me') {
+    if (req.method !== 'GET') { sendJson(res, 405, { message: 'Method not allowed' }); return; }
+    if (!requireSession(req, res)) return;
+    const user = getSession(req); sendJson(res, 200, { username: user.username, role: 'admin' }); return;
+  }
+  if (url.pathname.startsWith('/api/')) {
+    if (!requireSession(req, res)) return;
   }
 
-  if (parsedUrl.pathname === '/api/watchlist') {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
-    if (req.method === 'GET') {
-      const data = readWatchlist().map((item) => ({ ...item, score: computeWatchlistScore(item) }));
-      sendJson(res, 200, data);
-      return;
-    }
-
-    if (req.method === 'POST') {
-      try {
-        const payload = await parseBody(req);
-        const list = readWatchlist();
-        const item = normalizeWatchlistItem({
-          ...payload,
-          id: payload.id || `watch-${Date.now()}`,
-          score: computeWatchlistScore({ ...payload, status: payload.status || 'Monitoring', risk: payload.risk || 'Medium', category: payload.category || 'General' })
-        });
-        list.unshift(item);
-        writeWatchlist(list);
-        sendJson(res, 201, item);
-      } catch (error) {
-        sendJson(res, 400, { message: error.message || 'Invalid watchlist payload' });
-      }
-      return;
-    }
-
-    if (req.method === 'PUT') {
-      try {
-        const payload = await parseBody(req);
-        const list = readWatchlist();
-        const index = list.findIndex((item) => item.id === payload.id);
-        if (index === -1) {
-          sendJson(res, 404, { message: 'Watchlist item not found' });
-          return;
-        }
-
-        list[index] = normalizeWatchlistItem({
-          ...list[index],
-          ...payload,
-          updatedAt: new Date().toISOString(),
-          score: computeWatchlistScore({ ...list[index], ...payload })
-        });
-        writeWatchlist(list);
-        sendJson(res, 200, list[index]);
-      } catch (error) {
-        sendJson(res, 400, { message: error.message || 'Invalid watchlist payload' });
-      }
-      return;
-    }
-
-    if (req.method === 'DELETE') {
-      const id = parsedUrl.searchParams.get('id');
-      if (!id) {
-        sendJson(res, 400, { message: 'Missing id' });
-        return;
-      }
-
-      const list = readWatchlist();
-      const filtered = list.filter((item) => item.id !== id);
-      if (filtered.length === list.length) {
-        sendJson(res, 404, { message: 'Watchlist item not found' });
-        return;
-      }
-
-      writeWatchlist(filtered);
-      sendJson(res, 200, { message: 'Watchlist item deleted successfully' });
-      return;
-    }
-  }
-
-  if (parsedUrl.pathname === '/api/watchlist/sync') {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
-    if (req.method === 'GET') {
-      try {
-        const itemId = parsedUrl.searchParams.get('id');
-        if (itemId) {
-          const result = await syncWatchlistItemById(itemId);
-          if (!result) {
-            sendJson(res, 404, { message: 'Watchlist item not found' });
-            return;
-          }
-          sendJson(res, 200, { item: result, score: computeWatchlistScore(result) });
-          return;
-        }
-
-        const result = await syncWatchlistSources();
-        sendJson(res, 200, result);
-      } catch (error) {
-        sendJson(res, 500, { message: error.message || 'Watchlist sync failed' });
-      }
-      return;
-    }
-  }
-
-  if (parsedUrl.pathname === '/api/bnb/lookup') {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
-      return;
-    }
-
-    if (req.method === 'GET') {
-      try {
-        const agentId = parsedUrl.searchParams.get('agentId');
-        const wallet = parsedUrl.searchParams.get('wallet');
-        const name = parsedUrl.searchParams.get('name');
-        const network = parsedUrl.searchParams.get('network') || 'bsc-mainnet';
-
-        const result = await lookupBnbAgent({
-          agentId: agentId === null ? undefined : agentId,
-          wallet: wallet || undefined,
-          name: name || undefined,
-          network
-        });
-
-        sendJson(res, 200, result);
-      } catch (error) {
-        sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
-      }
-      return;
-    }
-
-    if (req.method === 'POST') {
+  if (url.pathname === '/api/agents') {
+    const agents = readJson(DATA_FILE);
+    if (req.method === 'GET') { sendJson(res, 200, agents); return; }
+    if (req.method === 'POST' || req.method === 'PUT') {
       try {
         const body = await parseBody(req);
-        const result = await lookupBnbAgent({
-          agentId: body.agentId,
-          wallet: body.wallet,
-          name: body.name,
-          network: body.network || 'bsc-mainnet'
-        });
-
-        sendJson(res, 200, result);
-      } catch (error) {
-        sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
-      }
+        if (!body.id || !body.name) { sendJson(res, 400, { message: 'Agent ID and name are required' }); return; }
+        const index = agents.findIndex((agent) => agent.id === body.id);
+        if (req.method === 'POST' && index >= 0) { sendJson(res, 409, { message: 'Agent ID already exists' }); return; }
+        const value = req.method === 'POST' ? body : index < 0 ? null : { ...agents[index], ...body };
+        if (!value) { sendJson(res, 404, { message: 'Agent not found' }); return; }
+        if (req.method === 'POST') agents.unshift(value); else agents[index] = value;
+        writeJson(DATA_FILE, agents); sendJson(res, req.method === 'POST' ? 201 : 200, value);
+      } catch (error) { sendJson(res, 400, { message: error.message }); }
       return;
     }
-
-    sendJson(res, 405, { message: 'Method not allowed' });
-    return;
+    if (req.method === 'DELETE') {
+      const id = url.searchParams.get('id'); const next = agents.filter((agent) => agent.id !== id);
+      if (next.length === agents.length) { sendJson(res, 404, { message: 'Agent not found' }); return; }
+      writeJson(DATA_FILE, next); sendJson(res, 200, { message: 'Agent deleted successfully' }); return;
+    }
   }
 
-  if (parsedUrl.pathname === '/api/bnb/health') {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      sendJson(res, 401, { message: 'Unauthorized' });
+  if (url.pathname === '/api/watchlist') {
+    const list = readWatchlist();
+    if (req.method === 'GET') {
+      const withScores = list.map((item) => ({ ...item, score: computeScore(item), signal: scoreLabel(computeScore(item)) }));
+      sendJson(res, 200, withScores); return;
+    }
+    if (req.method === 'POST' || req.method === 'PUT') {
+      try {
+        const body = await parseBody(req);
+        if (!body.name || !body.agentId) { sendJson(res, 400, { message: 'Project name and Agent ID are required' }); return; }
+        const index = list.findIndex((item) => item.id === body.id);
+        if (req.method === 'PUT' && index < 0) { sendJson(res, 404, { message: 'Watchlist item not found' }); return; }
+        const old = index >= 0 ? list[index] : null;
+        const item = normalizeWatchlistItem({ ...old, ...body, id: old?.id || `watch-${crypto.randomUUID()}`, updatedAt: new Date().toISOString() });
+        item.score = computeScore(item);
+        if (old) {
+          if (old.status !== item.status) addEvent(item.id, 'status_changed', `Status changed from ${old.status} to ${item.status}`, 'user', { from: old.status, to: item.status });
+          list[index] = item;
+        } else {
+          list.unshift(item); addEvent(item.id, 'project_added', `Added ${item.name} to watchlist`, 'user', { agentId: item.agentId });
+        }
+        writeWatchlist(list); sendJson(res, old ? 200 : 201, item);
+      } catch (error) { sendJson(res, 400, { message: error.message }); }
       return;
     }
-
-    sendJson(res, 200, {
-      ok: true,
-      network: 'bsc-mainnet',
-      registryContract: BNB_NETWORKS['bsc-mainnet'].registryContract,
-      source: '8004scan indexer',
-      note: 'Official ERC-8004 registry lookup endpoint for BNB agent records.'
-    });
-    return;
+    if (req.method === 'DELETE') {
+      const id = url.searchParams.get('id'); const next = list.filter((item) => item.id !== id);
+      if (next.length === list.length) { sendJson(res, 404, { message: 'Watchlist item not found' }); return; }
+      writeWatchlist(next); addEvent(id, 'project_removed', 'Project removed from watchlist', 'user'); sendJson(res, 200, { message: 'Watchlist item deleted successfully' }); return;
+    }
   }
 
+  if (url.pathname.startsWith('/api/watchlist/')) {
+    const suffix = url.pathname.slice('/api/watchlist/'.length);
+    if (suffix === 'sync' && req.method === 'POST') {
+      try {
+        const id = url.searchParams.get('id');
+        if (id) {
+          const item = await syncOne(id);
+          if (!item) { sendJson(res, 404, { message: 'Watchlist item not found' }); return; }
+          sendJson(res, 200, { item, score: computeScore(item) }); return;
+        }
+        sendJson(res, 200, await syncAll());
+      } catch (error) { sendJson(res, 500, { message: error.message || 'Watchlist sync failed' }); }
+      return;
+    }
+    if (suffix === 'alerts' && req.method === 'GET') { sendJson(res, 200, getAlerts()); return; }
+    if (suffix === 'events' && req.method === 'GET') {
+      const projectId = url.searchParams.get('projectId');
+      const events = readJson(EVENTS_FILE).filter((event) => !projectId || event.projectId === projectId).slice(0, 200);
+      sendJson(res, 200, events); return;
+    }
+    if (req.method === 'GET' && suffix) {
+      const item = readWatchlist().find((entry) => entry.id === decodeURIComponent(suffix));
+      if (!item) { sendJson(res, 404, { message: 'Watchlist item not found' }); return; }
+      const events = readJson(EVENTS_FILE).filter((event) => event.projectId === item.id).slice(0, 100);
+      sendJson(res, 200, { ...item, score: computeScore(item), signal: scoreLabel(computeScore(item)), events }); return;
+    }
+  }
+
+  if (url.pathname === '/api/bnb/lookup') {
+    if (req.method !== 'GET') { sendJson(res, 405, { message: 'Method not allowed' }); return; }
+    try {
+      sendJson(res, 200, await lookupBnbAgent({ agentId: url.searchParams.get('agentId'), wallet: url.searchParams.get('wallet'), name: url.searchParams.get('name'), network: url.searchParams.get('network') || 'bsc-mainnet' }));
+    } catch (error) { sendJson(res, 502, { message: error.message || 'BNB lookup failed' }); }
+    return;
+  }
+  if (url.pathname === '/api/bnb/health' && req.method === 'GET') {
+    sendJson(res, 200, { ok: true, network: 'bsc-mainnet', registryContract: BNB_NETWORKS['bsc-mainnet'].registryContract, source: '8004scan indexer' }); return;
+  }
   sendJson(res, 404, { message: 'Not found' });
 });
 
 server.listen(PORT, () => {
   console.log(`AgentRam API running at http://localhost:${PORT}`);
   console.log('Default login: admin / admin123');
-  console.log('BNB Agent lookup: /api/bnb/lookup?agentId=123&network=bsc-mainnet');
-  console.log('Project watchlist: /api/watchlist');
-  console.log('Project watchlist sync: /api/watchlist/sync');
+  console.log('Watchlist API: /api/watchlist');
+  console.log('Sync all sources: POST /api/watchlist/sync');
+  console.log('Alerts: GET /api/watchlist/alerts');
 });
 
 module.exports = server;
