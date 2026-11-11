@@ -1,7 +1,10 @@
 const API_URL = 'http://localhost:3000/api';
 const statusFilters = ['All', 'Active', 'Pending', 'Alert'];
+const watchlistStatusFilters = ['All', 'Monitoring', 'Needs Review', 'Verified', 'Deprecated'];
 let agents = [];
+let watchlist = [];
 let selectedStatus = 'All';
+let selectedWatchlistStatus = 'All';
 let toastTimer;
 
 const $ = (selector) => document.querySelector(selector);
@@ -17,48 +20,6 @@ function validAgent(agent) {
     ['Active', 'Pending', 'Alert'].includes(agent.status) &&
     ['Low', 'Medium', 'High'].includes(agent.risk) &&
     Number.isInteger(Number(agent.trust)) && Number(agent.trust) >= 0 && Number(agent.trust) <= 100;
-}
-
-function parseNaturalQuery(query = '') {
-  const text = String(query || '').trim().toLowerCase();
-  if (!text) {
-    return { status: null, risk: null, minTrust: null, wallet: null, keywords: [] };
-  }
-
-  const tokens = text.split(/\s+/).filter(Boolean);
-  const status = ['active', 'pending', 'alert'].find((value) => tokens.includes(value)) || null;
-  const risk = ['low', 'medium', 'high'].find((value) => tokens.includes(value)) || null;
-  const wallet = tokens.find((token) => token.startsWith('0x')) || null;
-  const minTrustTerm = tokens.find((token) => /^\d+%?$/.test(token));
-  const minTrust = minTrustTerm ? Number(minTrustTerm.replace('%', '')) : null;
-
-  return {
-    status,
-    risk,
-    wallet,
-    minTrust,
-    keywords: tokens.filter((token) => !['active', 'pending', 'alert', 'low', 'medium', 'high', 'trust', 'wallet', 'bnb', 'agent', 'find', 'search', 'show', 'list'].includes(token))
-  };
-}
-
-function smartFilterAgents(list, query = '') {
-  const filters = parseNaturalQuery(query);
-  const cleaned = String(query || '').trim();
-
-  if (!cleaned) {
-    return list;
-  }
-
-  return list.filter((agent) => {
-    const haystack = [agent.id, agent.name, agent.wallet, agent.status, agent.risk, agent.notes].join(' ').toLowerCase();
-    const keywordMatch = !filters.keywords.length || filters.keywords.some((keyword) => haystack.includes(keyword));
-    const statusMatch = !filters.status || agent.status.toLowerCase() === filters.status;
-    const riskMatch = !filters.risk || agent.risk.toLowerCase() === filters.risk;
-    const walletMatch = !filters.wallet || agent.wallet.toLowerCase().includes(filters.wallet);
-    const trustMatch = filters.minTrust === null || Number(agent.trust) >= Number(filters.minTrust);
-    const textMatch = !cleaned || haystack.includes(cleaned) || agent.id.toLowerCase().includes(cleaned) || agent.name.toLowerCase().includes(cleaned);
-    return keywordMatch && statusMatch && riskMatch && walletMatch && trustMatch && textMatch;
-  });
 }
 
 function getAuthHeaders() {
@@ -109,6 +70,16 @@ async function loadAgents() {
   return [];
 }
 
+async function loadWatchlist() {
+  try {
+    const data = await apiRequest('/watchlist');
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.warn('Watchlist load failed:', error.message);
+    return [];
+  }
+}
+
 function logout() {
   localStorage.removeItem('agentram_token');
   window.location.reload();
@@ -128,6 +99,17 @@ function statusBadgeClass(status) {
 }
 
 function riskBadgeClass(risk) {
+  return risk === 'Low' ? 'green' : risk === 'Medium' ? 'yellow' : 'red';
+}
+
+function watchlistStatusBadgeClass(status) {
+  if (status === 'Verified') return 'green';
+  if (status === 'Monitoring') return 'blue';
+  if (status === 'Needs Review') return 'yellow';
+  return 'red';
+}
+
+function watchlistRiskBadgeClass(risk) {
   return risk === 'Low' ? 'green' : risk === 'Medium' ? 'yellow' : 'red';
 }
 
@@ -198,11 +180,12 @@ function renderFilters() {
 }
 
 function renderTable() {
-  const searchValue = $('#searchInput').value.trim();
-  const filteredAgents = smartFilterAgents(
-    agents.filter((agent) => selectedStatus === 'All' || agent.status === selectedStatus),
-    searchValue
-  );
+  const searchValue = $('#searchInput').value.trim().toLowerCase();
+  const filteredAgents = agents.filter((agent) => {
+    const matchesStatus = selectedStatus === 'All' || agent.status === selectedStatus;
+    const searchable = [agent.id, agent.name, agent.wallet, agent.notes, agent.status, agent.risk].join(' ').toLowerCase();
+    return matchesStatus && (!searchValue || searchable.includes(searchValue));
+  });
 
   $('#resultCount').textContent = `${filteredAgents.length} hasil`;
   const body = $('#agentTableBody');
@@ -231,12 +214,64 @@ function renderTable() {
   `).join('');
 }
 
+function renderWatchlistTable() {
+  const panel = $('#watchlistPanel');
+  if (!panel) return;
+
+  const searchInput = $('#watchlistSearch');
+  const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
+  const filtered = watchlist.filter((item) => {
+    const matchesStatus = selectedWatchlistStatus === 'All' || item.status === selectedWatchlistStatus;
+    const haystack = [
+      item.name,
+      item.agentId,
+      item.category,
+      item.platform,
+      item.sourceType,
+      item.sourceUrl,
+      item.tags ? item.tags.join(' ') : '',
+      item.notes
+    ].join(' ').toLowerCase();
+    return matchesStatus && (!query || haystack.includes(query));
+  });
+
+  const countEl = $('#watchlistCount');
+  if (countEl) countEl.textContent = `${filtered.length} items`;
+
+  const body = $('#watchlistTableBody');
+  if (!body) return;
+
+  if (!filtered.length) {
+    body.innerHTML = '<tr><td colspan="9" class="empty-row">Tidak ada proyek yang cocok.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = filtered.map((item) => `
+    <tr>
+      <td><strong>${escapeHTML(item.name || 'Unnamed')}</strong></td>
+      <td>${escapeHTML(item.agentId || '—')}</td>
+      <td><span class="badge ${watchlistStatusBadgeClass(item.status)}">${escapeHTML(item.status || 'Monitoring')}</span></td>
+      <td>${escapeHTML(item.category || 'General')}</td>
+      <td>${escapeHTML(item.platform || '—')}</td>
+      <td><a href="${escapeHTML(item.sourceUrl || '#')}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.sourceType || 'web')}</a></td>
+      <td><span class="badge ${watchlistRiskBadgeClass(item.risk || 'Medium')}">${escapeHTML(item.risk || 'Medium')}</span></td>
+      <td>${escapeHTML(item.lastSeen || 'Recently')}</td>
+      <td>${escapeHTML((item.tags || []).join(', ') || '—')}</td>
+      <td class="row-actions">
+        <button class="action-btn" type="button" data-watchlist-action="edit" data-id="${escapeHTML(item.id)}">Edit</button>
+        <button class="action-btn danger-btn" type="button" data-watchlist-action="delete" data-id="${escapeHTML(item.id)}">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
 function refreshDashboard() {
   renderStats();
   renderStatusChart();
   renderTrustChart();
   renderFilters();
   renderTable();
+  renderWatchlistTable();
 }
 
 function openDialog(agent) {
@@ -361,6 +396,268 @@ async function handleTableAction(event) {
   }
 }
 
+function ensureWatchlistPanel() {
+  if ($('#watchlistPanel')) return;
+
+  const panel = document.createElement('div');
+  panel.id = 'watchlistPanel';
+  panel.className = 'wide-panel';
+  panel.innerHTML = `
+    <div class="panel-header">
+      <h3>Project Watchlist</h3>
+      <button class="primary-btn" type="button" id="watchlistAddButton">Add Project</button>
+    </div>
+    <div class="panel-header" style="margin-top: 12px; margin-bottom: 14px;">
+      <div class="search-box">
+        <input id="watchlistSearch" type="text" placeholder="Search project / agent / source" />
+      </div>
+      <div class="filter-row" id="watchlistFilters"></div>
+    </div>
+    <div class="result-badge" id="watchlistCount">0 items</div>
+    <div class="table-scroll" style="margin-top: 14px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Agent ID</th>
+            <th>Status</th>
+            <th>Category</th>
+            <th>Platform</th>
+            <th>Source</th>
+            <th>Risk</th>
+            <th>Last Seen</th>
+            <th>Tags</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="watchlistTableBody"></tbody>
+      </table>
+    </div>
+  `;
+
+  const target = $('#statsGrid');
+  if (target && target.parentNode) {
+    target.parentNode.insertBefore(panel, target.nextSibling);
+  }
+
+  const filters = $('#watchlistFilters');
+  if (filters) {
+    filters.innerHTML = watchlistStatusFilters.map((status) => `
+      <button class="filter-chip ${selectedWatchlistStatus === status ? 'active' : ''}" type="button" data-watchlist-status="${status}">${status}</button>
+    `).join('');
+
+    filters.querySelectorAll('[data-watchlist-status]').forEach((button) => {
+      button.addEventListener('click', () => {
+        selectedWatchlistStatus = button.dataset.watchlistStatus;
+        renderWatchlistFilters();
+        renderWatchlistTable();
+      });
+    });
+  }
+
+  $('#watchlistSearch').addEventListener('input', renderWatchlistTable);
+  $('#watchlistAddButton').addEventListener('click', () => openWatchlistModal());
+}
+
+function renderWatchlistFilters() {
+  const filters = $('#watchlistFilters');
+  if (!filters) return;
+
+  filters.innerHTML = watchlistStatusFilters.map((status) => `
+    <button class="filter-chip ${selectedWatchlistStatus === status ? 'active' : ''}" type="button" data-watchlist-status="${status}">${status}</button>
+  `).join('');
+
+  filters.querySelectorAll('[data-watchlist-status]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedWatchlistStatus = button.dataset.watchlistStatus;
+      renderWatchlistFilters();
+      renderWatchlistTable();
+    });
+  });
+}
+
+function openWatchlistModal(item = null) {
+  let dialog = $('#watchlistDialog');
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = 'watchlistDialog';
+    dialog.className = 'agent-dialog';
+    dialog.innerHTML = `
+      <div class="dialog-header">
+        <h2 id="watchlistDialogTitle">Add Project</h2>
+        <button type="button" class="icon-btn" id="watchlistDialogClose">×</button>
+      </div>
+      <form id="watchlistForm">
+        <div class="form-grid">
+          <input type="hidden" id="watchlistId" />
+          <label>
+            Project Name
+            <input id="watchlistName" name="name" required />
+          </label>
+          <label>
+            Agent ID
+            <input id="watchlistAgentId" name="agentId" required />
+          </label>
+          <label>
+            Category
+            <select id="watchlistCategory" name="category">
+              <option value="Launch">Launch</option>
+              <option value="Campaign">Campaign</option>
+              <option value="Freemint">Freemint</option>
+              <option value="Reward">Reward</option>
+              <option value="Claim">Claim</option>
+              <option value="Partner">Partner</option>
+              <option value="General">General</option>
+            </select>
+          </label>
+          <label>
+            Platform
+            <select id="watchlistPlatform" name="platform">
+              <option value="BNB">BNB</option>
+              <option value="Ethereum">Ethereum</option>
+              <option value="Solana">Solana</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <label>
+            Source Type
+            <select id="watchlistSourceType" name="sourceType">
+              <option value="website">Website</option>
+              <option value="x">X</option>
+              <option value="docs">Docs</option>
+              <option value="blog">Blog</option>
+              <option value="forum">Forum</option>
+              <option value="registry">Registry</option>
+              <option value="contract">Contract</option>
+            </select>
+          </label>
+          <label>
+            Source URL
+            <input id="watchlistSourceUrl" name="sourceUrl" type="url" placeholder="https://" />
+          </label>
+          <label>
+            Status
+            <select id="watchlistStatus" name="status">
+              <option value="Monitoring">Monitoring</option>
+              <option value="Needs Review">Needs Review</option>
+              <option value="Verified">Verified</option>
+              <option value="Deprecated">Deprecated</option>
+            </select>
+          </label>
+          <label>
+            Risk
+            <select id="watchlistRisk" name="risk">
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
+          </label>
+          <label class="full-width-form">
+            Tags
+            <input id="watchlistTags" name="tags" placeholder="launch, ai, reward" />
+          </label>
+          <label class="full-width-form">
+            Notes
+            <textarea id="watchlistNotes" name="notes" rows="4"></textarea>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="secondary-btn" id="watchlistCancelButton">Cancel</button>
+          <button type="submit" class="primary-btn">Save Project</button>
+        </div>
+      </form>
+    `;
+    document.body.appendChild(dialog);
+
+    $('#watchlistDialogClose').addEventListener('click', () => dialog.close());
+    $('#watchlistCancelButton').addEventListener('click', () => dialog.close());
+    $('#watchlistForm').addEventListener('submit', handleWatchlistSubmit);
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  }
+
+  $('#watchlistDialogTitle').textContent = item ? 'Edit Project' : 'Add Project';
+  $('#watchlistId').value = item?.id || '';
+  $('#watchlistName').value = item?.name || '';
+  $('#watchlistAgentId').value = item?.agentId || '';
+  $('#watchlistCategory').value = item?.category || 'General';
+  $('#watchlistPlatform').value = item?.platform || 'BNB';
+  $('#watchlistSourceType').value = item?.sourceType || 'website';
+  $('#watchlistSourceUrl').value = item?.sourceUrl || '';
+  $('#watchlistStatus').value = item?.status || 'Monitoring';
+  $('#watchlistRisk').value = item?.risk || 'Medium';
+  $('#watchlistTags').value = Array.isArray(item?.tags) ? item.tags.join(', ') : '';
+  $('#watchlistNotes').value = item?.notes || '';
+  dialog.showModal();
+}
+
+async function handleWatchlistSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const payload = {
+    id: $('#watchlistId').value || `watch-${Date.now()}`,
+    name: $('#watchlistName').value.trim(),
+    agentId: $('#watchlistAgentId').value.trim(),
+    category: $('#watchlistCategory').value,
+    platform: $('#watchlistPlatform').value,
+    sourceType: $('#watchlistSourceType').value,
+    sourceUrl: $('#watchlistSourceUrl').value.trim(),
+    status: $('#watchlistStatus').value,
+    risk: $('#watchlistRisk').value,
+    tags: $('#watchlistTags').value.split(',').map((value) => value.trim()).filter(Boolean),
+    notes: $('#watchlistNotes').value.trim(),
+    lastSeen: 'Recently'
+  };
+
+  if (!payload.name || !payload.agentId) {
+    showToast('Project name dan Agent ID wajib diisi.');
+    return;
+  }
+
+  try {
+    const existingId = $('#watchlistId').value;
+    if (existingId) {
+      await apiRequest('/watchlist', 'PUT', payload);
+      showToast('Project watchlist berhasil diperbarui.');
+    } else {
+      await apiRequest('/watchlist', 'POST', payload);
+      showToast('Project watchlist berhasil ditambahkan.');
+    }
+
+    watchlist = await loadWatchlist();
+    renderWatchlistTable();
+    $('#watchlistDialog').close();
+  } catch (error) {
+    showToast(error.message || 'Gagal menyimpan watchlist.');
+  }
+}
+
+async function handleWatchlistTableAction(event) {
+  const button = event.target.closest('[data-watchlist-action]');
+  if (!button) return;
+
+  const id = button.dataset.id;
+  const item = watchlist.find((entry) => entry.id === id);
+  if (!item) return;
+
+  if (button.dataset.watchlistAction === 'edit') {
+    openWatchlistModal(item);
+    return;
+  }
+
+  if (button.dataset.watchlistAction === 'delete' && confirm(`Hapus proyek ${item.name}?`)) {
+    try {
+      await apiRequest(`/watchlist?id=${encodeURIComponent(id)}`, 'DELETE');
+      watchlist = await loadWatchlist();
+      renderWatchlistTable();
+      showToast('Project watchlist berhasil dihapus.');
+    } catch (error) {
+      showToast(error.message || 'Gagal menghapus watchlist.');
+    }
+  }
+}
+
 async function handleLogin(event) {
   event.preventDefault();
   const username = $('#loginUsername').value.trim();
@@ -403,6 +700,131 @@ function renderDashboard() {
   $('#app').classList.remove('hidden');
 }
 
+function ensureBnbLookupPanel() {
+  const mount = $('#bnbLookupMount');
+  if (mount) return;
+
+  const container = document.createElement('div');
+  container.id = 'bnbLookupMount';
+  container.className = 'wide-panel';
+  container.innerHTML = `
+    <div class="panel-header">
+      <h3>BNB Agent / Freemint Lookup</h3>
+      <span class="result-badge">ERC-8004 registry</span>
+    </div>
+    <div class="form-grid">
+      <label>
+        Agent ID
+        <input id="bnbAgentId" type="text" placeholder="contoh: 123" />
+      </label>
+      <label>
+        Wallet Address
+        <input id="bnbWallet" type="text" placeholder="0x..." />
+      </label>
+      <label class="full-width-form">
+        Agent Name
+        <input id="bnbName" type="text" placeholder="contoh: my-agent" />
+      </label>
+      <label>
+        Network
+        <select id="bnbNetwork">
+          <option value="bsc-mainnet">BSC Mainnet</option>
+          <option value="bsc-testnet">BSC Testnet</option>
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button class="secondary-btn" type="button" id="bnbClearButton">Reset</button>
+        <button class="primary-btn" type="button" id="bnbSearchButton">Cari</button>
+      </div>
+    </div>
+    <div id="bnbLookupResult" class="detail-content" style="margin-top: 18px; min-height: 100px;">
+      <div class="result-badge">Belum ada pencarian.</div>
+    </div>
+  `;
+
+  const target = $('#statsGrid');
+  if (target && target.parentNode) {
+    target.parentNode.insertBefore(container, target.nextSibling);
+  } else {
+    const app = $('#app');
+    if (app) app.appendChild(container);
+  }
+
+  $('#bnbClearButton').addEventListener('click', () => {
+    $('#bnbAgentId').value = '';
+    $('#bnbWallet').value = '';
+    $('#bnbName').value = '';
+    $('#bnbNetwork').value = 'bsc-mainnet';
+    $('#bnbLookupResult').innerHTML = '<div class="result-badge">Belum ada pencarian.</div>';
+  });
+
+  $('#bnbSearchButton').addEventListener('click', runBnbLookup);
+}
+
+async function runBnbLookup() {
+  const resultBox = $('#bnbLookupResult');
+  if (!resultBox) return;
+
+  const params = {
+    agentId: $('#bnbAgentId').value.trim() || undefined,
+    wallet: $('#bnbWallet').value.trim() || undefined,
+    name: $('#bnbName').value.trim() || undefined,
+    network: $('#bnbNetwork').value || 'bsc-mainnet'
+  };
+
+  if (!params.agentId && !params.wallet && !params.name) {
+    resultBox.innerHTML = '<div class="result-badge">Isi minimal satu filter: Agent ID, wallet, atau name.</div>';
+    return;
+  }
+
+  resultBox.innerHTML = '<div class="result-badge">Mencari data BNB Agent...</div>';
+
+  try {
+    const fallback = await fetch(`${API_URL}/bnb/lookup?${new URLSearchParams({
+      ...(params.agentId ? { agentId: params.agentId } : {}),
+      ...(params.wallet ? { wallet: params.wallet } : {}),
+      ...(params.name ? { name: params.name } : {}),
+      network: params.network
+    })}`, {
+      headers: getAuthHeaders()
+    });
+
+    const json = await fallback.json();
+    if (!fallback.ok) throw new Error(json?.message || 'BNB lookup gagal');
+
+    const rows = (json.results || []).map((item) => `
+      <div class="detail-item wide-item">
+        <span>Agent ${item.agentId ?? '—'}</span>
+        <strong>${escapeHTML(item.name || 'Unnamed')} • ${escapeHTML(item.ownerAddress || '—')} • ${item.freemintCandidate ? 'Freemint candidate' : 'Regular agent'}</strong>
+      </div>
+    `).join('');
+
+    resultBox.innerHTML = `
+      <div class="detail-grid">
+        <div class="detail-item">
+          <span>Network</span>
+          <strong>${escapeHTML(json.network)}</strong>
+        </div>
+        <div class="detail-item">
+          <span>Registry</span>
+          <strong>${escapeHTML(json.registryContract || '—')}</strong>
+        </div>
+        <div class="detail-item">
+          <span>Matched</span>
+          <strong>${json.matched ?? 0}</strong>
+        </div>
+        <div class="detail-item">
+          <span>Source</span>
+          <strong>${escapeHTML(json.source || '—')}</strong>
+        </div>
+        ${rows || '<div class="detail-item wide-item"><span>Hasil</span><strong>Tidak ada agent yang cocok.</strong></div>'}
+      </div>
+    `;
+  } catch (error) {
+    resultBox.innerHTML = `<div class="result-badge">${escapeHTML(error.message || 'Gagal mencari data BNB Agent.')}</div>`;
+  }
+}
+
 async function initDashboard() {
   const user = await loadMe();
   if (!user) {
@@ -413,7 +835,11 @@ async function initDashboard() {
   renderDashboard();
   $('#usernameLabel').textContent = user.username;
   agents = await loadAgents();
+  watchlist = await loadWatchlist();
   refreshDashboard();
+  ensureBnbLookupPanel();
+  ensureWatchlistPanel();
+  renderWatchlistTable();
 }
 
 async function init() {
@@ -440,6 +866,7 @@ async function init() {
   });
   $('#agentForm').addEventListener('submit', handleSubmit);
   $('#agentTableBody').addEventListener('click', handleTableAction);
+  $('#watchlistTableBody').addEventListener('click', handleWatchlistTableAction);
   $('#closeDialogButton').addEventListener('click', () => $('#agentDialog').close());
   $('#cancelDialogButton').addEventListener('click', () => $('#agentDialog').close());
   $('#closeDetailDialogButton').addEventListener('click', () => $('#agentDetailDialog').close());
