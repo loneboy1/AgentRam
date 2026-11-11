@@ -141,7 +141,6 @@ function decodeAgentUri(agentUri) {
       const decoded = Buffer.from(base64, 'base64').toString('utf8');
       return JSON.parse(decoded);
     }
-
     if (agentUri.startsWith('http://') || agentUri.startsWith('https://')) {
       return null;
     }
@@ -168,16 +167,19 @@ function normalizeAgentLookup(item) {
     Array.isArray(item?.services) ? item.services.map((svc) => JSON.stringify(svc)).join(' ') : ''
   ].join(' ').toLowerCase();
 
-  const freemintMatch = /(freemint|free[-\s]?mint|minting|launchpad|campaign)/i.test(textBlob);
+  const freemintCandidate = /(freemint|free[-\s]?mint|minting|launchpad|campaign)/i.test(textBlob);
 
   return {
-    agentId: tokenId ? Number(tokenId) : null,
+    agentId: tokenId !== null && tokenId !== undefined ? Number(tokenId) : null,
     name,
     ownerAddress,
+    network: item?.network || 'bsc-mainnet',
+    registryContract: item?.registryContract || item?.registry_contract || '',
     agentUri,
-    agentURI: agentUri,
     decodedAgentUri,
-    freemintCandidate: freemintMatch,
+    freemintCandidate,
+    description,
+    source: '8004scan indexer',
     raw: item
   };
 }
@@ -210,8 +212,8 @@ async function fetchBnbAgents(networkName = 'bsc-mainnet') {
 }
 
 async function lookupBnbAgent({ agentId, wallet, name, network = 'bsc-mainnet' }) {
-  const networkKey = BNB_NETWORKS[network] ? network : 'bsc-mainnet';
-  const { items, total, registryContract } = await fetchBnbAgents(networkKey);
+  const networkName = BNB_NETWORKS[network] ? network : 'bsc-mainnet';
+  const { items, total, registryContract } = await fetchBnbAgents(networkName);
 
   let filtered = items;
 
@@ -220,21 +222,19 @@ async function lookupBnbAgent({ agentId, wallet, name, network = 'bsc-mainnet' }
   }
 
   if (wallet) {
-    const targetWallet = wallet.toLowerCase();
-    filtered = filtered.filter((item) => String(item.ownerAddress || '').toLowerCase() === targetWallet);
+    filtered = filtered.filter((item) => String(item.ownerAddress || '').toLowerCase() === wallet.toLowerCase());
   }
 
   if (name) {
-    const queryName = name.toLowerCase();
-    filtered = filtered.filter((item) => String(item.name || '').toLowerCase().includes(queryName));
+    filtered = filtered.filter((item) => String(item.name || '').toLowerCase().includes(name.toLowerCase()));
   }
 
   return {
-    network: networkKey,
+    network: networkName,
     registryContract,
     total,
     matched: filtered.length,
-    results: filtered.slice(0, 10),
+    results: filtered.slice(0, 25),
     source: '8004scan indexer'
   };
 }
@@ -382,14 +382,14 @@ const server = http.createServer(async (req, res) => {
         const name = parsedUrl.searchParams.get('name');
         const network = parsedUrl.searchParams.get('network') || 'bsc-mainnet';
 
-        const data = await lookupBnbAgent({
+        const result = await lookupBnbAgent({
           agentId: agentId === null ? undefined : agentId,
           wallet: wallet || undefined,
           name: name || undefined,
           network
         });
 
-        sendJson(res, 200, data);
+        sendJson(res, 200, result);
       } catch (error) {
         sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
       }
@@ -399,14 +399,14 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST') {
       try {
         const body = await parseBody(req);
-        const data = await lookupBnbAgent({
+        const result = await lookupBnbAgent({
           agentId: body.agentId,
           wallet: body.wallet,
           name: body.name,
           network: body.network || 'bsc-mainnet'
         });
 
-        sendJson(res, 200, data);
+        sendJson(res, 200, result);
       } catch (error) {
         sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
       }
@@ -429,7 +429,7 @@ const server = http.createServer(async (req, res) => {
       network: 'bsc-mainnet',
       registryContract: BNB_NETWORKS['bsc-mainnet'].registryContract,
       source: '8004scan indexer',
-      note: 'Official ERC-8004 registry lookup endpoint for BNB Agentic Wallet IDs.'
+      note: 'Official ERC-8004 registry lookup endpoint for BNB agent records.'
     });
     return;
   }
@@ -440,7 +440,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`AgentRam API running at http://localhost:${PORT}`);
   console.log('Default login: admin / admin123');
-  console.log('BNB Agent lookup: GET /api/bnb/lookup?agentId=123&network=bsc-mainnet or POST body { agentId, wallet, name, network }');
+  console.log('BNB Agent lookup: /api/bnb/lookup?agentId=123&network=bsc-mainnet');
 });
 
 module.exports = server;
