@@ -1,7 +1,7 @@
 {
   "name": "agentram-local-api",
   "version": "1.0.0",
-  "description": "Secure local API for AgentRam monitoring dashboard",
+  "description": "Node API and static server for the AgentRam BNB Chain agent monitoring dashboard",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
