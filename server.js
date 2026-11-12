@@ -61,6 +61,56 @@ function ensureSeedData() {
       trust: 52,
       lastSync: '5 min ago',
       notes: 'Repeated failed node heartbeat'
+    },
+    {
+      id: 'FA-1088',
+      name: 'Alya Putri',
+      wallet: '0x9EE4...AB42',
+      status: 'Active',
+      risk: 'Low',
+      trust: 97,
+      lastSync: '1 min ago',
+      notes: 'No critical events detected'
+    },
+    {
+      id: 'FA-1102',
+      name: 'Fahri Zain',
+      wallet: '0x5531...10FA',
+      status: 'Alert',
+      risk: 'Medium',
+      trust: 64,
+      lastSync: '9 min ago',
+      notes: 'Manual review required'
+    },
+    {
+      id: 'FA-1120',
+      name: 'Dina Karina',
+      wallet: '0xF097...87DB',
+      status: 'Active',
+      risk: 'Low',
+      trust: 90,
+      lastSync: '3 min ago',
+      notes: 'Rewards distribution normal'
+    },
+    {
+      id: 'FA-1139',
+      name: 'Bima Hadi',
+      wallet: '0x12AF...77B2',
+      status: 'Pending',
+      risk: 'Low',
+      trust: 81,
+      lastSync: '21 min ago',
+      notes: 'Awaiting second credential scan'
+    },
+    {
+      id: 'FA-1164',
+      name: 'Sinta Lestari',
+      wallet: '0xB708...9C40',
+      status: 'Active',
+      risk: 'Low',
+      trust: 96,
+      lastSync: '6 min ago',
+      notes: 'Strong compliance score'
     }
   ]);
 }
@@ -368,7 +418,8 @@ const server = http.createServer(async (req, res) => {
         });
 
         sendJson(res, 200, result);
-      } catch (error) {        sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
+      } catch (error) {
+        sendJson(res, 500, { message: error.message || 'BNB lookup failed' });
       }
       return;
     }
