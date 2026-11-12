@@ -468,13 +468,11 @@ function renderBnbResults(results) {
 
 async function handleBnbLookup(event) {
   event.preventDefault();
-  const agentId = $('#bnbAgentId').value.trim();
-  const wallet = $('#bnbWallet').value.trim();
-  const name = $('#bnbName').value.trim();
+  const query = $('#bnbQuery').value.trim();
   const network = $('#bnbNetwork').value;
 
-  if (!agentId && !wallet && !name) {
-    showToast('Isi salah satu: Agent ID, wallet, atau nama.');
+  if (!query) {
+    showToast('Isi dulu yang mau dicari: ID, wallet, atau nama.');
     return;
   }
 
@@ -486,9 +484,9 @@ async function handleBnbLookup(event) {
 
   try {
     const params = new URLSearchParams();
-    if (agentId) params.set('agentId', agentId);
-    if (wallet) params.set('wallet', wallet);
-    if (name) params.set('name', name);
+    if (/^\d+$/.test(query)) params.set('agentId', query);
+    else if (/^0x[0-9a-fA-F]+$/.test(query)) params.set('wallet', query);
+    else params.set('name', query);
     params.set('network', network);
 
     const result = await fetchJson(`/api/bnb/lookup?${params.toString()}`);
