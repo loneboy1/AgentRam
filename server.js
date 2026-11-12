@@ -102,12 +102,12 @@ function normalizeAgentLookup(item) {
   };
 }
 
-async function fetchBnbAgents(networkName = 'bsc-mainnet') {
+async function fetchBnbAgents(networkName = 'bsc-mainnet', offset = 0, limit = 100) {
   const network = BNB_NETWORKS[networkName] || BNB_NETWORKS['bsc-mainnet'];
   const url = new URL(`${network.scanApi}/agents`);
   url.searchParams.set('chain_id', String(network.chainId));
-  url.searchParams.set('limit', '100');
-  url.searchParams.set('offset', '0');
+  url.searchParams.set('limit', String(limit));
+  url.searchParams.set('offset', String(offset));
 
   const response = await fetch(url.toString(), {
     headers: { Accept: 'application/json' },
@@ -153,6 +153,52 @@ async function lookupBnbAgent({ agentId, wallet, name, network = 'bsc-mainnet' }
     total,
     matched: filtered.length,
     results: filtered.slice(0, 25),
+    source: '8004scan indexer'
+  };
+}
+
+// Freemint terbaru: indexer mengembalikan agent terbaru dulu (ID terbesar),
+// tapi hanya ~1-2% yang lolos deteksi kata kunci freemint, jadi pindai
+// beberapa halaman terbaru sampai target terpenuhi (maks 10 halaman).
+async function listLatestFreemint({ network = 'bsc-mainnet', limit = 25 } = {}) {
+  const networkName = BNB_NETWORKS[network] ? network : 'bsc-mainnet';
+  const target = Math.max(1, Math.min(25, Number(limit) || 25));
+  const PAGE_SIZE = 100;
+  const BATCH_PAGES = 5;
+  const MAX_BATCHES = 2;
+
+  const byId = new Map();
+  let total = 0;
+  let scanned = 0;
+
+  for (let batch = 0; batch < MAX_BATCHES; batch++) {
+    const offsets = Array.from({ length: BATCH_PAGES }, (_, i) => (batch * BATCH_PAGES + i) * PAGE_SIZE);
+    const pages = await Promise.allSettled(offsets.map((offset) => fetchBnbAgents(networkName, offset, PAGE_SIZE)));
+    for (const page of pages) {
+      if (page.status !== 'fulfilled') continue;
+      total = page.value.total || total;
+      scanned += page.value.items.length;
+      for (const item of page.value.items) {
+        if (item.freemintCandidate && item.agentId !== null && item.agentId !== undefined) {
+          byId.set(String(item.agentId), item);
+        }
+      }
+    }
+    if (byId.size >= target) break;
+  }
+
+  if (scanned === 0) {
+    throw new Error('8004scan API request failed: no data');
+  }
+
+  const results = [...byId.values()].sort((a, b) => Number(b.agentId) - Number(a.agentId)).slice(0, target);
+
+  return {
+    network: networkName,
+    total,
+    scanned,
+    matched: results.length,
+    results,
     source: '8004scan indexer'
   };
 }
@@ -215,6 +261,22 @@ const server = http.createServer(async (req, res) => {
     }
 
     sendJson(res, 405, { message: 'Method not allowed' });
+    return;
+  }
+
+  if (parsedUrl.pathname === '/api/bnb/freemint') {
+    if (req.method !== 'GET') {
+      sendJson(res, 405, { message: 'Method not allowed' });
+      return;
+    }
+    try {
+      const network = parsedUrl.searchParams.get('network') || 'bsc-mainnet';
+      const limit = parsedUrl.searchParams.get('limit') || '25';
+      const result = await listLatestFreemint({ network, limit });
+      sendJson(res, 200, result);
+    } catch (error) {
+      sendJson(res, 500, { message: error.message || 'BNB freemint lookup failed' });
+    }
     return;
   }
 
