@@ -1,9 +1,10 @@
-const API_URL = '/api';
+const WATCHLIST_KEY = 'agentram-watchlist-v1';
 const statusFilters = ['All', 'Active', 'Pending', 'Alert'];
-let agents = [];
+let agents = loadWatchlist();
 let selectedStatus = 'All';
 let selectedAgentIds = new Set();
 let toastTimer;
+let confirmResolve = null;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -18,6 +19,35 @@ function validAgent(agent) {
     ['Active', 'Pending', 'Alert'].includes(agent.status) &&
     ['Low', 'Medium', 'High'].includes(agent.risk) &&
     Number.isInteger(Number(agent.trust)) && Number(agent.trust) >= 0 && Number(agent.trust) <= 100;
+}
+
+// Daftar pantauan disimpan di browser masing-masing (localStorage):
+// tiap orang yang buka web ini lihat daftarnya sendiri-sendiri.
+function loadWatchlist() {
+  try {
+    const raw = localStorage.getItem(WATCHLIST_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    if (Array.isArray(data)) return data.filter(validAgent);
+  } catch (error) {
+    console.warn('Watchlist load failed:', error.message);
+  }
+  return [];
+}
+
+function saveWatchlist() {
+  try {
+    localStorage.setItem(WATCHLIST_KEY, JSON.stringify(agents));
+  } catch (error) {
+    console.warn('Watchlist save failed:', error.message);
+  }
+}
+
+function shortWallet(wallet = '') {
+  const value = String(wallet || '');
+  if (!value || value === '—') return '—';
+  if (value.length <= 13) return value;
+  return `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
 
 function parseNaturalQuery(query = '') {
@@ -62,34 +92,14 @@ function smartFilterAgents(list, query = '') {
   });
 }
 
-async function apiRequest(path, method = 'GET', payload) {
-  const response = await fetch(`${API_URL}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    ...(payload !== undefined ? { body: JSON.stringify(payload) } : {})
-  });
-
+async function fetchJson(path) {
+  const response = await fetch(path, { headers: { Accept: 'application/json' } });
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
-
   if (!response.ok) {
     throw new Error(data?.message || 'Request failed');
   }
-
   return data;
-}
-
-async function loadAgents() {
-  try {
-    const data = await apiRequest('/agents');
-    if (Array.isArray(data) && data.every(validAgent)) {
-      return data;
-    }
-  } catch (error) {
-    console.warn('API load failed:', error.message);
-  }
-
-  return [];
 }
 
 function showToast(message) {
@@ -186,7 +196,10 @@ function renderTable() {
   const body = $('#agentTableBody');
 
   if (!filteredAgents.length) {
-    body.innerHTML = '<tr><td colspan="10" class="empty-row">Tidak ada agent yang cocok.</td></tr>';
+    const emptyMessage = agents.length === 0
+      ? 'Daftar pantauan masih kosong. Cari agent lewat panel BNB Agent Lookup di atas, lalu klik + Pantau.'
+      : 'Tidak ada agent yang cocok.';
+    body.innerHTML = `<tr><td colspan="10" class="empty-row">${escapeHTML(emptyMessage)}</td></tr>`;
     syncSelectionUI();
     return;
   }
@@ -196,7 +209,7 @@ function renderTable() {
       <td><input type="checkbox" class="row-select" data-id="${escapeHTML(agent.id)}" ${selectedAgentIds.has(agent.id) ? 'checked' : ''} /></td>
       <td><strong>${escapeHTML(agent.id)}</strong></td>
       <td>${escapeHTML(agent.name)}</td>
-      <td>${escapeHTML(agent.wallet || '—')}</td>
+      <td>${escapeHTML(shortWallet(agent.wallet))}</td>
       <td><span class="badge ${statusBadgeClass(agent.status)}"><span class="status-dot"></span>${escapeHTML(agent.status)}</span></td>
       <td><span class="badge ${riskBadgeClass(agent.risk)}">${escapeHTML(agent.risk)}</span></td>
       <td><span class="badge ${Number(agent.trust) >= 85 ? 'green' : Number(agent.trust) >= 70 ? 'yellow' : 'blue'}">${Number(agent.trust)}%</span></td>
@@ -220,22 +233,43 @@ function refreshDashboard() {
   renderTable();
 }
 
+// Dialog konfirmasi di dalam halaman (pengganti confirm() bawaan browser,
+// supaya hapus tetap jalan di semua browser termasuk saat dites otomatis).
+function confirmAction(message) {
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+    $('#confirmMessage').textContent = message;
+    $('#confirmDialog').showModal();
+  });
+}
+
+function closeConfirm(result) {
+  const dialog = $('#confirmDialog');
+  if (dialog.open) dialog.close();
+  if (confirmResolve) {
+    const resolve = confirmResolve;
+    confirmResolve = null;
+    resolve(result);
+  }
+}
+
 function openDialog(agent) {
+  if (!agent) return;
   const form = $('#agentForm');
   form.reset();
-  $('#originalId').value = agent?.id || '';
-  $('#dialogTitle').textContent = agent ? 'Edit Agent' : 'Tambah Agent';
-  $('#agentId').value = agent?.id || '';
-  $('#agentId').readOnly = Boolean(agent);
-  $('#agentName').value = agent?.name || '';
-  $('#agentWallet').value = agent?.wallet || '';
-  $('#agentStatus').value = agent?.status || 'Active';
-  $('#agentRisk').value = agent?.risk || 'Low';
-  $('#agentTrust').value = agent?.trust ?? 80;
-  $('#agentLastSync').value = agent?.lastSync || '';
-  $('#agentNotes').value = agent?.notes || '';
+  $('#originalId').value = agent.id;
+  $('#dialogTitle').textContent = 'Edit Agent';
+  $('#agentId').value = agent.id;
+  $('#agentId').readOnly = true;
+  $('#agentName').value = agent.name || '';
+  $('#agentWallet').value = agent.wallet || '';
+  $('#agentStatus').value = agent.status || 'Pending';
+  $('#agentRisk').value = agent.risk || 'Low';
+  $('#agentTrust').value = agent.trust ?? 50;
+  $('#agentLastSync').value = agent.lastSync || '';
+  $('#agentNotes').value = agent.notes || '';
   $('#agentDialog').showModal();
-  $('#agentId').focus();
+  $('#agentName').focus();
 }
 
 function openDetailModal(agent) {
@@ -278,10 +312,14 @@ function openDetailModal(agent) {
   $('#agentDetailDialog').showModal();
 }
 
-async function handleSubmit(event) {
+function handleSubmit(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const originalId = $('#originalId').value;
+  if (!originalId) {
+    $('#agentDialog').close();
+    return;
+  }
   const id = formData.get('id').trim();
   const duplicate = agents.some((agent) => agent.id.toLowerCase() === id.toLowerCase() && agent.id !== originalId);
 
@@ -303,21 +341,17 @@ async function handleSubmit(event) {
     notes: formData.get('notes').trim()
   };
 
-  try {
-    if (originalId) {
-      await apiRequest('/agents', 'PUT', agent);
-      showToast('Data agent berhasil diperbarui.');
-    } else {
-      await apiRequest('/agents', 'POST', agent);
-      showToast('Agent berhasil ditambahkan.');
-    }
-
-    agents = await loadAgents();
-    refreshDashboard();
-    $('#agentDialog').close();
-  } catch (error) {
-    showToast(error.message || 'Gagal menyimpan agent.');
+  const index = agents.findIndex((item) => item.id === originalId);
+  if (index === -1) {
+    showToast('Agent tidak ditemukan.');
+    return;
   }
+
+  agents[index] = agent;
+  saveWatchlist();
+  refreshDashboard();
+  $('#agentDialog').close();
+  showToast('Data agent berhasil diperbarui.');
 }
 
 async function handleTableAction(event) {
@@ -330,15 +364,14 @@ async function handleTableAction(event) {
     openDetailModal(agent);
   } else if (button.dataset.action === 'edit') {
     openDialog(agent);
-  } else if (button.dataset.action === 'delete' && confirm(`Hapus agent ${agent.id}?`)) {
-    try {
-      await apiRequest(`/agents?id=${encodeURIComponent(agent.id)}`, 'DELETE');
-      agents = await loadAgents();
-      refreshDashboard();
-      showToast('Agent berhasil dihapus.');
-    } catch (error) {
-      showToast(error.message || 'Gagal menghapus agent.');
-    }
+  } else if (button.dataset.action === 'delete') {
+    const ok = await confirmAction(`Hapus agent ${agent.id} (${agent.name}) dari daftar pantauan?`);
+    if (!ok) return;
+    agents = agents.filter((item) => item.id !== agent.id);
+    selectedAgentIds.delete(agent.id);
+    saveWatchlist();
+    refreshDashboard();
+    showToast('Agent berhasil dihapus.');
   }
 }
 
@@ -420,7 +453,7 @@ function renderBnbResults(results) {
             <tr>
               <td><strong>${item.agentId !== null && item.agentId !== undefined ? escapeHTML(String(item.agentId)) : '—'}</strong></td>
               <td>${escapeHTML(item.name || '—')}</td>
-              <td>${escapeHTML(item.ownerAddress || '—')}</td>
+              <td>${escapeHTML(shortWallet(item.ownerAddress))}</td>
               <td>${item.freemintCandidate ? '<span class="badge green">Freemint</span>' : '<span class="badge blue">—</span>'}</td>
               <td class="row-actions">
                 <button class="action-btn" type="button" data-bnb-index="${index}" ${item.agentId === null || item.agentId === undefined ? 'disabled' : ''}>+ Pantau</button>
@@ -458,7 +491,7 @@ async function handleBnbLookup(event) {
     if (name) params.set('name', name);
     params.set('network', network);
 
-    const result = await apiRequest(`/bnb/lookup?${params.toString()}`);
+    const result = await fetchJson(`/api/bnb/lookup?${params.toString()}`);
     bnbResults = Array.isArray(result?.results) ? result.results : [];
     $('#bnbResultCount').textContent = `${result?.matched ?? bnbResults.length} hasil dari ${result?.total ?? bnbResults.length} agent`;
     renderBnbResults(bnbResults);
@@ -473,31 +506,33 @@ async function handleBnbLookup(event) {
   }
 }
 
-async function handleBnbAdd(event) {
+function handleBnbAdd(event) {
   const button = event.target.closest('button[data-bnb-index]');
   if (!button) return;
   const item = bnbResults[Number(button.dataset.bnbIndex)];
   if (!item || item.agentId === null || item.agentId === undefined) return;
 
+  const id = String(item.agentId);
+  if (agents.some((agent) => agent.id === id)) {
+    showToast(`Agent ${id} sudah ada di daftar pantauan.`);
+    return;
+  }
+
   const agent = {
-    id: String(item.agentId),
-    name: item.name || `Agent ${item.agentId}`,
+    id,
+    name: item.name || `Agent ${id}`,
     wallet: item.ownerAddress || '',
     status: 'Pending',
     risk: 'Low',
     trust: 50,
     lastSync: 'Baru saja',
-    notes: 'Dari BNB lookup'
+    notes: item.freemintCandidate ? 'Dari BNB lookup · Kandidat Freemint' : 'Dari BNB lookup'
   };
 
-  try {
-    await apiRequest('/agents', 'POST', agent);
-    agents = await loadAgents();
-    refreshDashboard();
-    showToast(`Agent ${agent.id} ditambahkan ke pantauan.`);
-  } catch (error) {
-    showToast(error.message || 'Gagal menambahkan agent.');
-  }
+  agents.unshift(agent);
+  saveWatchlist();
+  refreshDashboard();
+  showToast(`Agent ${id} ditambahkan ke pantauan.`);
 }
 
 function syncSelectionUI() {
@@ -516,35 +551,26 @@ function syncSelectionUI() {
 async function handleDeleteSelected() {
   if (!selectedAgentIds.size) return;
   const count = selectedAgentIds.size;
-  if (!confirm(`Hapus ${count} agent yang dipilih?`)) return;
+  const ok = await confirmAction(`Hapus ${count} agent yang dipilih dari daftar pantauan?`);
+  if (!ok) return;
 
-  const ids = Array.from(selectedAgentIds);
-  let deleted = 0;
-  for (const id of ids) {
-    try {
-      await apiRequest(`/agents?id=${encodeURIComponent(id)}`, 'DELETE');
-      deleted += 1;
-    } catch (error) {
-      console.warn('Gagal menghapus', id, error.message);
-    }
-  }
-
+  const ids = new Set(selectedAgentIds);
+  agents = agents.filter((agent) => !ids.has(agent.id));
   selectedAgentIds.clear();
-  agents = await loadAgents();
+  saveWatchlist();
   refreshDashboard();
-  showToast(deleted === count ? `${deleted} agent dihapus.` : `${deleted} dari ${count} agent dihapus.`);
+  showToast(`${count} agent dihapus.`);
 }
 
-async function initDashboard() {
-  agents = await loadAgents();
+function initDashboard() {
+  agents = loadWatchlist();
   refreshDashboard();
 }
 
-async function init() {
-  await initDashboard();
+function init() {
+  initDashboard();
 
   $('#searchInput').addEventListener('input', renderTable);
-  $('#addAgentButton').addEventListener('click', () => openDialog());
   $('#exportButton').addEventListener('click', exportAgents);
   $('#agentForm').addEventListener('submit', handleSubmit);
   $('#agentTableBody').addEventListener('click', handleTableAction);
@@ -565,7 +591,7 @@ async function init() {
   });
   $('#deleteSelectedButton').addEventListener('click', handleDeleteSelected);
   $('#closeDialogButton').addEventListener('click', () => $('#agentDialog').close());
-    $('#cancelDialogButton').addEventListener('click', () => $('#agentDialog').close());
+  $('#cancelDialogButton').addEventListener('click', () => $('#agentDialog').close());
   $('#closeDetailDialogButton').addEventListener('click', () => $('#agentDetailDialog').close());
   $('#detailCloseButton').addEventListener('click', () => $('#agentDetailDialog').close());
   $('#agentDialog').addEventListener('click', (event) => {
@@ -574,6 +600,13 @@ async function init() {
   $('#agentDetailDialog').addEventListener('click', (event) => {
     if (event.target === $('#agentDetailDialog')) $('#agentDetailDialog').close();
   });
+  $('#confirmDeleteButton').addEventListener('click', () => closeConfirm(true));
+  $('#cancelConfirmButton').addEventListener('click', () => closeConfirm(false));
+  $('#closeConfirmDialogButton').addEventListener('click', () => closeConfirm(false));
+  $('#confirmDialog').addEventListener('click', (event) => {
+    if (event.target === $('#confirmDialog')) closeConfirm(false);
+  });
+  $('#confirmDialog').addEventListener('cancel', () => closeConfirm(false));
   $('#bnbLookupForm').addEventListener('submit', handleBnbLookup);
   $('#bnbLookupResults').addEventListener('click', handleBnbAdd);
   document.querySelectorAll('.nav a[data-menu]').forEach((link) => {
