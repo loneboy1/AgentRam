@@ -24,7 +24,7 @@
           <a class="active" href="#" data-menu="overview">Overview</a>
           <a href="#" data-menu="agents">Agents</a>
           <a href="#" data-menu="alerts">Alerts</a>
-          <a href="watchlist.html">Daftar Pantauan</a>
+          <a href="watchlist.html">Jelajahi Agent</a>
           <a href="#" data-menu="reports">Reports</a>
           <a href="#" data-menu="audit">Audit</a>
         </nav>
@@ -44,9 +44,8 @@
           </div>
           <div class="topbar-actions">
             <span class="user-pill">Hi, <strong id="usernameLabel">admin</strong></span>
-            <a class="secondary-btn" href="watchlist.html" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">Daftar Pantauan</a>
+            <a class="secondary-btn" href="watchlist.html" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">Jelajahi Agent</a>
             <button class="secondary-btn" id="exportButton" type="button">Export JSON</button>
-            <button class="primary-btn" id="addAgentButton" type="button">+ Tambah Agent</button>
           </div>
         </header>
 
@@ -105,8 +104,8 @@
         <section class="table-panel">
           <div class="table-header">
             <div>
-              <p class="eyebrow">Live Data</p>
-              <h3>Daftar Pantauan</h3>
+              <p class="eyebrow">Live On-Chain</p>
+              <h3>Daftar Pantauan Agen</h3>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
               <span id="resultCount" class="result-badge">0 results</span>
@@ -180,6 +179,21 @@
       <div id="auditContent" class="detail-content"></div>
       <div class="dialog-actions">
         <button class="primary-btn" type="button" id="auditCloseButton">Tutup</button>
+      </div>
+    </dialog>
+
+    <dialog id="confirmDialog" class="detail-dialog" aria-labelledby="confirmTitle">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Konfirmasi</p>
+          <h2 id="confirmTitle">Hapus agent?</h2>
+        </div>
+        <button class="icon-btn" type="button" id="closeConfirmDialogButton" aria-label="Tutup konfirmasi">×</button>
+      </div>
+      <div id="confirmMessage" class="detail-content"></div>
+      <div class="dialog-actions">
+        <button class="secondary-btn" type="button" id="cancelConfirmButton">Batal</button>
+        <button class="primary-btn" type="button" id="confirmDeleteButton">Hapus</button>
       </div>
     </dialog>
 
