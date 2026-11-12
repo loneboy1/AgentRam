@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AgentRam Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-wrap">
+          <div class="brand-mark">A</div>
+          <div>
+            <p class="eyebrow">Monitoring</p>
+            <h1>AgentRam</h1>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <a class="active" href="#" data-menu="overview">Overview</a>
+          <a href="#" data-menu="agents">Agents</a>
+          <a href="#" data-menu="alerts">Alerts</a>
+          <a href="watchlist.html">Jelajahi Agent</a>
+          <a href="freemint.html">Radar Freemint</a>
+          <a href="#" data-menu="reports">Reports</a>
+          <a href="#" data-menu="audit">Audit</a>
+        </nav>
+
+        <div class="health-card">
+          <p class="eyebrow">Network Health</p>
+          <h3>96.4%</h3>
+          <span>Stable this hour</span>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Operations</p>
+            <h2>Freemint Agent Monitoring</h2>
+          </div>
+          <div class="topbar-actions">
+            <span class="user-pill">Hi, <strong id="usernameLabel">admin</strong></span>
+            <a class="secondary-btn" href="watchlist.html" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">Jelajahi Agent</a>
+            <a class="secondary-btn" href="freemint.html" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">Radar Freemint</a>
+            <button class="secondary-btn" id="importButton" type="button">Import JSON</button>
+            <input type="file" id="importFileInput" accept=".json,application/json" hidden />
+            <button class="secondary-btn" id="exportButton" type="button">Export JSON</button>
+          </div>
+        </header>
+
+        <section class="stats-grid" id="statsGrid"></section>
+
+        <section class="wide-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Quick Controls</p>
+              <h3>Agent Registry</h3>
+            </div>
+            <div class="search-box">
+              <input id="searchInput" type="search" placeholder="Cari ID, nama, wallet, notes..." aria-label="Cari agent" />
+            </div>
+          </div>
+          <div class="filter-row" id="statusFilters"></div>
+        </section>
+
+        <section class="charts-grid">
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Status Distribution</h3>
+            </div>
+            <div id="statusChart" class="bar-chart"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Trust Score</h3>
+            </div>
+            <div id="trustChart" class="ring-chart"></div>
+          </div>
+        </section>
+
+        <section class="wide-panel" id="bnbLookupPanel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">BNB Chain · ERC-8004</p>
+              <h3>BNB Agent Lookup</h3>
+            </div>
+            <span id="bnbResultCount" class="result-badge">Belum ada pencarian</span>
+          </div>
+          <form id="bnbLookupForm">
+            <div class="form-grid">
+              <label>Cari agent<input id="bnbQuery" type="text" placeholder="ID, wallet (0x...), atau nama agent" /></label>
+              <label>Network<select id="bnbNetwork"><option value="bsc-mainnet">BSC Mainnet</option><option value="bsc-testnet">BSC Testnet</option></select></label>
+            </div>
+            <div class="dialog-actions">
+              <button class="primary-btn" type="submit" id="bnbLookupButton">Cari Agent</button>
+              <button class="secondary-btn" type="button" id="bnbFreemintButton">Freemint terbaru</button>
+            </div>
+          </form>
+          <p class="lookup-hint">Hanya agent ERC-8004 yang tercatat di indexer 8004scan. Nama SPACE ID .ai yang belum didaftarkan sebagai agent ERC-8004 tidak akan ketemu di sini — itu bukan bug.</p>
+          <div id="bnbLookupResults" class="detail-content"></div>
+        </section>
+
+        <section class="table-panel">
+          <div class="table-header">
+            <div>
+              <p class="eyebrow">Live On-Chain</p>
+              <h3>Daftar Pantauan Agen</h3>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span id="resultCount" class="result-badge">0 results</span>
+              <button class="secondary-btn" id="deleteSelectedButton" type="button" disabled>Hapus yang dipilih</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="selectAllCheckbox" aria-label="Pilih semua" /></th><th>Agent ID</th><th>Nama</th><th>Wallet</th><th>Status</th><th>Risk</th>
+                  <th>Trust</th><th>Last Sync</th><th>Notes</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="agentTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="agentDialog" class="agent-dialog" aria-labelledby="dialogTitle">
+      <form id="agentForm">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">Agent Registry</p>
+            <h2 id="dialogTitle">Tambah Agent</h2>
+          </div>
+          <button class="icon-btn" type="button" id="closeDialogButton" aria-label="Tutup">×</button>
+        </div>
+        <input id="originalId" type="hidden" />
+        <div class="form-grid">
+          <label>Agent ID<input id="agentId" name="id" required maxlength="40" placeholder="FA-1200" /></label>
+          <label>Nama<input id="agentName" name="name" required maxlength="100" placeholder="Nama agent" /></label>
+          <label>Wallet<input id="agentWallet" name="wallet" maxlength="120" placeholder="Alamat wallet" /></label>
+          <label>Status<select id="agentStatus" name="status"><option>Active</option><option>Pending</option><option>Alert</option></select></label>
+          <label>Risk<select id="agentRisk" name="risk"><option>Low</option><option>Medium</option><option>High</option></select></label>
+          <label>Trust (0–100)<input id="agentTrust" name="trust" type="number" min="0" max="100" value="80" required /></label>
+          <label>Last Sync<input id="agentLastSync" name="lastSync" maxlength="80" placeholder="Baru saja" /></label>
+          <label class="full-width">Notes<textarea id="agentNotes" name="notes" rows="3" maxlength="500" placeholder="Catatan pantauan"></textarea></label>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary-btn" type="button" id="cancelDialogButton">Batal</button>
+          <button class="primary-btn" type="submit">Simpan Agent</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="agentDetailDialog" class="detail-dialog" aria-labelledby="detailTitle">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Detail Agent</p>
+          <h2 id="detailTitle">Informasi Agent</h2>
+        </div>
+        <button class="icon-btn" type="button" id="closeDetailDialogButton" aria-label="Tutup detail">×</button>
+      </div>
+      <div id="detailContent" class="detail-content"></div>
+      <div class="dialog-actions">
+        <button class="primary-btn" type="button" id="detailCloseButton">Tutup</button>
+      </div>
+    </dialog>
+
+    <dialog id="auditDialog" class="detail-dialog" aria-labelledby="auditTitle">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Audit Trail</p>
+          <h2 id="auditTitle">Log Audit</h2>
+        </div>
+        <button class="icon-btn" type="button" id="closeAuditDialogButton" aria-label="Tutup audit">×</button>
+      </div>
+      <div id="auditContent" class="detail-content"></div>
+      <div class="dialog-actions">
+        <button class="primary-btn" type="button" id="auditCloseButton">Tutup</button>
+      </div>
+    </dialog>
+
+    <dialog id="confirmDialog" class="detail-dialog" aria-labelledby="confirmTitle">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Konfirmasi</p>
+          <h2 id="confirmTitle">Hapus agent?</h2>
+        </div>
+        <button class="icon-btn" type="button" id="closeConfirmDialogButton" aria-label="Tutup konfirmasi">×</button>
+      </div>
+      <div id="confirmMessage" class="detail-content"></div>
+      <div class="dialog-actions">
+        <button class="secondary-btn" type="button" id="cancelConfirmButton">Batal</button>
+        <button class="primary-btn" type="button" id="confirmDeleteButton">Hapus</button>
+      </div>
+    </dialog>
+
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
+    <script src="dashboard.js"></script>
+  </body>
+</html>
