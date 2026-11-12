@@ -841,6 +841,9 @@ function showImportSummary({ toImport, duplicates, invalid }) {
   if (duplicates.length) {
     addRow('Duplikat yang dilewati', duplicates.map((agent) => agent.id).join(', '));
   }
+  if (invalid.length) {
+    addRow('Tidak valid (ID)', invalid.map((entry) => entry?.id ?? '?').join(', '));
+  }
   $('#auditTitle').textContent = 'Hasil Import Backup';
   $('#auditContent').innerHTML = `<div class="detail-grid">${rows.join('')}</div>`;
   $('#auditDialog').showModal();
