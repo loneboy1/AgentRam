@@ -156,28 +156,47 @@ async function fetchBnbAgents(networkName = 'bsc-mainnet', offset = 0, limit = 1
   };
 }
 
+// Lookup lewat parameter search / owner_address indexer, BUKAN dengan
+// mengambil 100 agent terbaru lalu memfilter di memori: agent yang sudah
+// berumur sejam saja bisa jatuh keluar dari jendela 100 terbaru (416709
+// sudah 111 di belakang yang terbaru) sehingga lookup mengembalikan 0.
 async function lookupBnbAgent({ agentId, wallet, name, network = 'bsc-mainnet' }) {
   const networkName = BNB_NETWORKS[network] ? network : 'bsc-mainnet';
-  const { items, total, registryContract } = await fetchBnbAgents(networkName);
+  const networkCfg = BNB_NETWORKS[networkName];
+  const url = new URL(`${networkCfg.scanApi}/agents`);
+  url.searchParams.set('chain_id', String(networkCfg.chainId));
+  url.searchParams.set('limit', '25');
+  url.searchParams.set('offset', '0');
+  if (wallet) url.searchParams.set('owner_address', wallet);
+  else if (agentId !== undefined && agentId !== null && agentId !== '') url.searchParams.set('search', String(agentId));
+  else if (name) url.searchParams.set('search', name);
+
+  const response = await fetch(url.toString(), {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(30000)
+  });
+  if (!response.ok) {
+    throw new Error(`8004scan API request failed: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const items = (Array.isArray(data?.items) ? data.items : []).map(normalizeAgentLookup);
 
   let filtered = items;
-
   if (agentId !== undefined && agentId !== null && agentId !== '') {
     filtered = filtered.filter((item) => String(item.agentId) === String(agentId));
   }
-
   if (wallet) {
     filtered = filtered.filter((item) => String(item.ownerAddress || '').toLowerCase() === wallet.toLowerCase());
   }
-
   if (name) {
     filtered = filtered.filter((item) => String(item.name || '').toLowerCase().includes(name.toLowerCase()));
   }
 
   return {
     network: networkName,
-    registryContract,
-    total,
+    registryContract: networkCfg.registryContract,
+    total: Number(data?.total ?? items.length ?? 0),
     matched: filtered.length,
     results: filtered.slice(0, 25),
     source: '8004scan indexer'
