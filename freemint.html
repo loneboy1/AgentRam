@@ -57,6 +57,16 @@
       try { return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(iso)); }
       catch { return '—'; }
     };
+    const fmtAge = (iso) => {
+      if (!iso) return '';
+      const ms = Date.now() - new Date(iso).getTime();
+      if (!Number.isFinite(ms) || ms < 0) return '';
+      const mins = Math.floor(ms / 60000);
+      if (mins < 60) return `${mins} mnt lalu`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `${hours} jam lalu`;
+      return `${Math.floor(hours / 24)} hari lalu`;
+    };
     const riskBadge = (risk, safety) => {
       const r = String(risk || 'unknown').toLowerCase();
       if (r === 'low') return '<span class="badge green">Rendah</span>';
@@ -91,7 +101,7 @@
           <td>${item.mints !== null && item.mints !== undefined ? Number(item.mints).toLocaleString('id-ID') : '—'}</td>
           <td>${riskBadge(item.risk, item.safety)}</td>
           <td class="muted">${esc((item.sources || []).map((s) => s === 'catalog' ? 'katalog' : s).join(', '))}</td>
-          <td class="muted">${fmtWib(item.firstSeen)}</td>
+          <td class="muted">${fmtWib(item.firstSeen)}${fmtAge(item.firstSeen) ? `<br>${fmtAge(item.firstSeen)}` : ''}</td>
           <td>${item.links && item.links.bscscan ? `<a class="rowlink" href="${esc(item.links.bscscan)}" target="_blank" rel="noopener noreferrer">BscScan ↗</a>` : ''}${item.links && item.links.datt ? `<br><a class="rowlink" href="${esc(item.links.datt)}" target="_blank" rel="noopener noreferrer">datt.my ↗</a>` : ''}</td>
         </tr>`).join('');
     }
