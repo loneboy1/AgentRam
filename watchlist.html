@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Direktori sumber AgentRam untuk pantau Agent ID terbaru, free mint, dan lead kampanye BNB Chain." />
-  <title>Daftar Pantauan Sumber — AgentRam</title>
+  <title>Jelajahi Agent — AgentRam</title>
   <style>
     :root{color-scheme:dark;--bg:#07111d;--line:rgba(148,163,184,.18);--text:#edf5ff;--muted:#a6b6cb;--accent:#4cc9f0}
     *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#122540 0%,var(--bg) 42%,#040d18 100%);color:var(--text);font:16px/1.5 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:inherit}.shell{width:min(1180px,calc(100% - 36px));margin:0 auto;padding:32px 0 56px}.top{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:28px}.brand{display:flex;align-items:center;gap:12px}.mark{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-weight:800;background:linear-gradient(135deg,var(--accent),#7c4dff);color:#02131d}.eyebrow{margin:0 0 5px;color:var(--muted);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase}.brand h1,.hero h2{margin:0}.top a,.source-link{color:#8fe5fa;text-decoration:none}.top a:hover,.source-link:hover{text-decoration:underline}.hero{margin:36px 0 24px}.hero h2{font-size:clamp(1.8rem,4vw,2.7rem);line-height:1.15}.hero p:last-child{max-width:780px;color:var(--muted)}
@@ -15,7 +15,7 @@
 <body>
   <main class="shell">
     <header class="top">
-      <div class="brand"><div class="mark" aria-hidden="true">A</div><div><p class="eyebrow">AgentRam · Direktori Sumber</p><h1>Daftar Pantauan</h1></div></div>
+      <div class="brand"><div class="mark" aria-hidden="true">A</div><div><p class="eyebrow">AgentRam · Direktori Sumber</p><h1>Jelajahi Agent</h1></div></div>
       <a href="index.html">← Kembali ke dashboard</a>
     </header>
     <section class="hero" aria-labelledby="page-title">
@@ -30,27 +30,22 @@
     </section>
     <div class="list-head"><strong>Sumber yang dipantau</strong><span id="resultCount" aria-live="polite"></span></div>
     <section id="sourceGrid" class="grid" aria-label="Daftar sumber pantauan"></section>
-    <p class="note"><strong>Catatan penting:</strong> folder watchlist ini menandai sumber ajang discovery, bukan pengesahan resmi kampanye atau mint. Beberapa URL masih placeholder karena tautan asli belum stabil. Free mint tidak selalu berarti tanpa biaya total: gas tetap ada, dan semua lead perlu diverifikasi di kontrak on-chain serta situs resmi proyek.</p>
+    <p class="note"><strong>Catatan penting:</strong> folder watchlist ini menandai sumber ajang discovery, bukan pengesahan resmi kampanye atau mint. Free mint tidak selalu berarti tanpa biaya total: gas tetap ada, dan semua lead perlu diverifikasi di kontrak on-chain serta situs resmi proyek.</p>
     <a class="back" href="index.html">Kembali ke AgentRam</a>
   </main>
   <script>
     const sources = [
       {id:'unitytool',name:'unitytool.app — Agent Radar',category:'Agent discovery',description:'Direktori/pemantauan agent.',url:'https://unitytool.app',label:'Buka unitytool.app'},
-      {id:'mint-jettt',name:'mint.jettt',category:'Mint dashboard',description:'Dashboard mint.',url:'https://mint.jettt',label:'Buka mint.jettt'},
       {id:'datt',name:'datt.my — MintRadar',category:'Mint dashboard',description:'MintRadar.',url:'https://datt.my',label:'Buka datt.my'},
       {id:'thecolony',name:'thecolony.uk',category:'Agent discovery',description:'Sumber pemantauan agent.',url:'https://thecolony.uk',label:'Buka thecolony.uk'},
       {id:'whalecalls',name:'whalecalls.club/monitor',category:'Monitoring',description:'Halaman monitor WhaleCalls.',url:'https://whalecalls.club/monitor',label:'Buka WhaleCalls monitor'},
       {id:'agentidhub',name:'agentidhub.eth.limo — Agent ID Hub',category:'Agent discovery',description:'Katalog Agent ID dan proyek. Digunakan sebagai sumber katalog utama untuk riset mint.',url:'https://agentidhub.eth.limo',label:'Buka Agent ID Hub'},
-      {id:'agent-catalog-data',name:'Agent ID Hub · Project Catalog',category:'Mint catalog',description:'Data catalog proyek untuk fase, verdict, biaya, risiko, deadline, dan progres mint.',url:'https://agentidhub.eth.limo/project-catalog.js',label:'Buka project catalog'},
-      {id:'agent-radar-tunnel',name:'Agent Radar @airdrop_nanhan',category:'Agent discovery',description:'Tautan trycloudflare belum stabil; tetap dipertahankan sebagai placeholder pencarian.',url:'https://www.google.com/search?q='+encodeURIComponent('"Agent Radar" "airdrop_nanhan" trycloudflare'),label:'Cari tautan Agent Radar',placeholder:true},
-      {id:'boltbook',name:'Boltbook — Alphapedia + Alpha Board',category:'Community & alpha',description:'URL kanonis belum diberikan; placeholder pencarian sementara.',url:'https://www.google.com/search?q='+encodeURIComponent('Boltbook Alphapedia Alpha Board'),label:'Cari Boltbook',placeholder:true},
+      {id:'agent-radar-tunnel',name:'Agent Radar @airdrop_nanhan',category:'Agent discovery',description:'Akun X Agent Radar — pantau info mint Agent ID terbaru.',url:'https://x.com/airdrop_nanhan',label:'Buka x.com/airdrop_nanhan'},
       {id:'nftcalendar',name:'NFT Calendar · BSC',category:'Calendar',description:'Kalender drop NFT BSC; aggregator, bukan jaminan resmi.',url:'https://nftcalendar.io/b/bsc/',label:'Buka kalender BSC'},
-      {id:'nftdropscalendar',name:'NFT Drops Calendar · BNB Chain',category:'Calendar',description:'Aggregator kalender drop BNB Chain; listing dapat kedaluwarsa atau berubah.',url:'https://nftdropscalendar.com/nft-drops/bnb-chain',label:'Buka BNB Chain drop list'},
       {id:'bscscan',name:'BscScan · BNB Smart Chain Explorer',category:'On-chain explorer',description:'Explorer utama untuk melihat kontrak, transaksi, NFT, token, dan aktivitas on-chain.',url:'https://bscscan.com/',label:'Buka BscScan'},
       {id:'oklink-bsc',name:'OKLink · BNB Chain Explorer',category:'On-chain explorer',description:'Explorer alternatif untuk data on-chain BNB Chain.',url:'https://www.oklink.com/bsc',label:'Buka OKLink BSC'},
       {id:'bnbscan',name:'BNBScan · Explorer alternatif',category:'On-chain explorer',description:'Explorer alternatif BNB Chain untuk kontrak, alamat, dan transaksi.',url:'https://bnbscan.com/',label:'Buka BNBScan'},
       {id:'blockchair-bnb',name:'Blockchair · BNB Explorer',category:'On-chain explorer',description:'Explorer dan analitik tambahan untuk data BNB Chain.',url:'https://blockchair.com/bnb',label:'Buka Blockchair BNB'},
-      {id:'bnb-beacon-explorer',name:'BNB Beacon Chain Explorer',category:'On-chain explorer',description:'Explorer untuk asset dan data jaringan Binance Chain; berguna untuk cross-check, bukan pengesahan kampanye.',url:'https://explorer.bnbchain.org/',label:'Buka BNB Beacon Explorer'},
       {id:'binance-announcements',name:'Binance · Support Announcements',category:'Official announcements',description:'Pusat pengumuman resmi Binance. Cari Agent ID, BNB, NFT, atau mint update.',url:'https://www.binance.com/en/support/announcement',label:'Buka Binance announcements'},
       {id:'bnbchain-blog',name:'BNB Chain · Blog',category:'Official announcements',description:'Update ekosistem dan pengumuman resmi BNB Chain.',url:'https://www.bnbchain.org/en/blog',label:'Buka BNB Chain blog'},
       {id:'binance-square-nft',name:'Binance Square · #nft',category:'Social & community',description:'Feed komunitas untuk rubrik NFT dan lead baru.',url:'https://www.binance.com/en/square/hashtag/nft',label:'Cari #nft di Binance Square'},
@@ -67,7 +62,7 @@
       {id:'mint-radar-tool',name:'Mint Radar (GitHub)',category:'Research tool',description:'Tool komunitas untuk menyaring katalog Agent ID berdasarkan mint aktif, free/gas-only, dan batas risiko.',url:'https://github.com/kyuzalabs/mint-radar',label:'Lihat repo Mint Radar'},
       {id:'tracker-agentic-mint',name:'Agentic Mint Tracker (GitHub)',category:'Research tool',description:'Tracker komunitas yang memantau mint Agent ID di BSC.',url:'https://github.com/avarhman-coder/Tracker-Agentic-Mint',label:'Lihat repo tracker'},
       {id:'bsc-mint-skills',name:'BSC Mint Skills (GitHub)',category:'Research tool',description:'Skill komunitas untuk pre-check mint BSC terkait Agent ID.',url:'https://github.com/lmingfei856-hue/bsc-mint-skills',label:'Lihat repo BSC Mint Skills'},
-      {id:'binance-agent-radar',name:'BSC IA Scan / Binance Agent Radar',category:'Research tool',description:'Repo yang memuat feed snapshot, data Agent ID/BSC, dan indikator aktivitas mint.',url:'https://github.com/mdi06/bsc.ia-scan',label:'Lihat repo BSC IA Scan'},
+      {id:'binance-agent-radar',name:'BSC AI Scan / Binance Agent Radar',category:'Research tool',description:'Repo yang memuat feed snapshot, data Agent ID/BSC, dan indikator aktivitas mint.',url:'https://github.com/mdi06/bsc.ia-scan',label:'Lihat repo BSC AI Scan'},
       {id:'agentic-playbook',name:'Agentic Free-Mint Playbook (GitHub)',category:'Research & safety',description:'Playbook riset yang merujuk feed Binance Square, roundup artikel, pencarian web, dan situs proyek.',url:'https://github.com/errnex/prabowo-nft/blob/main/agentic-zeroconfig.md',label:'Lihat playbook'},
       {id:'fair-mint-repo',name:'Fair Mint on BNB Chain (GitHub)',category:'Campaign / project',description:'Contoh proyek kampanye yang menyebut persyaratan Agent ID, jadwal, dan verifikasi kontrak.',url:'https://github.com/fairmint-bnb/fair-mint',label:'Lihat repo Fair Mint'},
       {id:'web-search-general',name:'Web search · free mint / Agent ID / 免费铸造',category:'Search',description:'Pencarian luas keyword Inggris + Mandarin untuk lead terbaru.',url:'https://www.google.com/search?q='+encodeURIComponent('"free mint" "Agent ID" OR 免费铸造'),label:'Cari keyword web'},
