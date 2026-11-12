@@ -108,13 +108,16 @@
               <p class="eyebrow">Live Data</p>
               <h3>Daftar Pantauan</h3>
             </div>
-            <span id="resultCount" class="result-badge">0 results</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span id="resultCount" class="result-badge">0 results</span>
+              <button class="secondary-btn" id="deleteSelectedButton" type="button" disabled>Hapus yang dipilih</button>
+            </div>
           </div>
           <div class="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th>Agent ID</th><th>Nama</th><th>Wallet</th><th>Status</th><th>Risk</th>
+                  <th><input type="checkbox" id="selectAllCheckbox" aria-label="Pilih semua" /></th><th>Agent ID</th><th>Nama</th><th>Wallet</th><th>Status</th><th>Risk</th>
                   <th>Trust</th><th>Last Sync</th><th>Notes</th><th>Action</th>
                 </tr>
               </thead>
