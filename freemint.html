@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Radar freemint NFT terbaru di BNB Chain — digabung dari koncet, Agent ID Hub, dan datt.my MintRadar." />
+  <title>Radar Freemint — AgentRam</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07111d;--line:rgba(148,163,184,.18);--text:#edf5ff;--muted:#a6b6cb;--accent:#4cc9f0}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#122540 0%,var(--bg) 42%,#040d18 100%);color:var(--text);font:16px/1.5 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:inherit}.shell{width:min(1180px,calc(100% - 36px));margin:0 auto;padding:32px 0 56px}.top{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:28px}.brand{display:flex;align-items:center;gap:12px}.mark{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-weight:800;background:linear-gradient(135deg,var(--accent),#7c4dff);color:#02131d}.eyebrow{margin:0 0 5px;color:var(--muted);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase}.brand h1,.hero h2{margin:0}.top a{color:#8fe5fa;text-decoration:none}.top a:hover{text-decoration:underline}.hero{margin:36px 0 24px}.hero h2{font-size:clamp(1.8rem,4vw,2.7rem);line-height:1.15}.hero p:last-child{max-width:780px;color:var(--muted)}
+    .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:22px 0}.stat,.panel{background:rgba(16,31,47,.88);border:1px solid var(--line);border-radius:16px}.stat{padding:16px}.stat span{display:block;color:var(--muted);font-size:.82rem}.stat strong{font-size:1.55rem}.panel{padding:18px;margin-bottom:18px}.toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.search{flex:1;min-width:220px;background:rgba(7,17,31,.9);border:1px solid var(--line);border-radius:11px;color:var(--text);padding:11px 13px;font:inherit}.btn{border:1px solid rgba(76,201,240,.7);border-radius:11px;background:rgba(76,201,240,.14);color:var(--text);padding:11px 16px;font:inherit;cursor:pointer}.btn:disabled{opacity:.5;cursor:wait}.status{margin-top:12px;color:var(--muted);font-size:.86rem}.status .ok{color:#86efac}.status .bad{color:#fca5a5}
+    .table-wrap{overflow-x:auto}.table-wrap table{width:100%;border-collapse:collapse;font-size:.9rem;min-width:760px}.table-wrap th,.table-wrap td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}.table-wrap th{color:var(--muted);font-size:.76rem;text-transform:uppercase;letter-spacing:.06em}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem;overflow-wrap:anywhere}.muted{color:var(--muted)}.badge{display:inline-block;border-radius:999px;padding:3px 9px;font-size:.75rem;border:1px solid var(--line);white-space:nowrap}.badge.green{color:#86efac;border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.12)}.badge.yellow{color:#fcd34d;border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.1)}.badge.red{color:#fca5a5;border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.1)}.badge.blue{color:#bceefa;border-color:rgba(76,201,240,.35);background:rgba(76,201,240,.1)}.rowlink{color:#8fe5fa;text-decoration:none;white-space:nowrap}.rowlink:hover{text-decoration:underline}.empty{text-align:center;padding:32px;color:var(--muted)}.panel h3{margin:0 0 10px}.panel ul{margin:0;padding-left:20px;color:var(--muted);font-size:.92rem}.panel ul li{margin:6px 0}.panel ul strong{color:var(--text)}.note{margin-top:22px;padding:14px 16px;border:1px solid rgba(251,191,36,.25);border-radius:12px;background:rgba(251,191,36,.06);color:#f6dfa0;font-size:.86rem}.back{display:inline-block;margin-top:24px;color:var(--muted)}
+    @media(max-width:720px){.shell{width:min(100% - 24px,600px);padding-top:20px}.top{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top">
+      <div class="brand"><div class="mark" aria-hidden="true">A</div><div><p class="eyebrow">AgentRam · Freemint NFT · BNB Chain</p><h1>Radar Freemint</h1></div></div>
+      <a href="index.html">← Kembali ke dashboard</a>
+    </header>
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">Live scan · koncet + Agent ID Hub + datt.my</p>
+      <h2 id="page-title">Project freemint terbaru, satu daftar.</h2>
+      <p>Tiap kali dipindai, radar mengambil feed mint live (koncet), katalog proyek Agent ID Hub, dan tabel MintRadar datt.my — digabung, dihapus duplikatnya per alamat kontrak, diurutkan dari project yang paling baru lahir (bukan yang cuma baru di-mint lagi). Project yang lahir kurang dari 6 jam lalu dapat badge BARU.</p>
+    </section>
+    <section class="stats" aria-label="Ringkasan radar">
+      <div class="stat"><span>Total hasil</span><strong id="statTotal">—</strong></div>
+      <div class="stat"><span>Masih bisa mint</span><strong id="statOpen">—</strong></div>
+      <div class="stat"><span>Harga 0 BNB</span><strong id="statFree">—</strong></div>
+      <div class="stat"><span>Sumber OK</span><strong id="statSources">—</strong></div>
+    </section>
+    <section class="panel" aria-label="Pindai radar">
+      <div class="toolbar">
+        <input id="search" class="search" type="search" placeholder="Cari nama atau alamat kontrak…" aria-label="Cari project" />
+        <button id="scanButton" class="btn" type="button">Pindai sekarang</button>
+      </div>
+      <p id="scanStatus" class="status">Belum dipindai. Klik “Pindai sekarang”.</p>
+    </section>
+    <section class="panel table-wrap" aria-label="Hasil radar">
+      <table>
+        <thead>
+          <tr><th>Project</th><th>Kontrak</th><th>Harga</th><th>Sisa</th><th>Mints</th><th>Risiko</th><th>Sumber</th><th>Terlihat</th><th>Aksi</th></tr>
+        </thead>
+        <tbody id="resultBody"><tr><td colspan="9" class="empty">Belum ada hasil. Klik “Pindai sekarang”.</td></tr></tbody>
+      </table>
+    </section>
+    <section class="panel" aria-label="Daftar tunggu">
+      <h3>Daftar tunggu</h3>
+      <ul>
+        <li><strong>Genesis, Torch, Orbit Atlas, Chrome Runner, Voxel Sprite, Comet Signal, ELSY AGENT</strong> — owner masih hidup, dipantau terus.</li>
+        <li><strong>Agentic Gangster</strong> — free-nya challenge-based: harus sign + kumpulin 32 fragments dalam 30 menit, jadi butuh kamu sendiri yang mainin.</li>
+        <li><strong>SEVENFOLD</strong> — skip sesuai keputusan, pace-nya sudah melambat.</li>
+      </ul>
+    </section>
+    <section class="panel" aria-label="Diblokir">
+      <h3>Diblokir — jangan di-mint</h3>
+      <ul>
+        <li><strong>NIGHTFORGE palsu <span class="mono">0x051f…</span></strong> — unverified, beda kontrak sama yang asli.</li>
+        <li><strong>GHOSTSHELL, Arcane Stones</strong> — unverified.</li>
+        <li><strong>Exit Gang</strong> — backdoor: ada alamat hard-coded yang pegang setBaseURI + withdraw walau owner-nya sudah renounce.</li>
+      </ul>
+    </section>
+    <section class="panel" aria-label="Sudah di-mint">
+      <h3>Sudah di-mint (Intan, 12 Nov 2026)</h3>
+      <ul>
+        <li><strong>EMBERANVIL #326</strong> — fee 0.000023 BNB, bonus 10.000 EMBER (belum di-claim).</li>
+        <li><strong>NIGHTFORGE #448</strong> — fee 0.0000227 BNB, bonus 10.000 FORGE (belum di-claim).</li>
+        <li><strong>Moth Cabinet #941</strong> — fee 0.000017 BNB, 10.000 MDUST langsung masuk wallet, plus tier claim 75.000–1.000.000 MDUST setelah reveal.</li>
+        <li><strong>The Claf Eye #3442</strong> — fee 0.0000109 BNB, janji 8.333 $CLAF per Eye setelah presale (janji off-contract). Total fee 4 mint: 0.0000736 BNB.</li>
+      </ul>
+    </section>
+    <p class="note"><strong>Catatan penting:</strong> “freemint” di sini artinya harga mint 0 BNB menurut sumbernya — gas tetap ada, dan label ini bukan jaminan resmi. Selalu cek kontrak di BscScan / datt.my sebelum mint. Katalog Agent ID Hub terakhir di-update 1 Nov 2026, jadi datanya bisa ketinggalan; feed koncet yang paling real-time.</p>
+    <a class="back" href="index.html">Kembali ke AgentRam</a>
+  </main>
+  <script>
+    let radarData = [];
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const shortAddr = (a) => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '—';
+    const fmtWib = (iso) => {
+      if (!iso) return '—';
+      try { return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(iso)); }
+      catch { return '—'; }
+    };
+    const riskBadge = (risk, safety) => {
+      const r = String(risk || 'unknown').toLowerCase();
+      if (r === 'low') return '<span class="badge green">Rendah</span>';
+      if (r === 'medium') return `<span class="badge yellow">Sedang${safety ? ' · ' + esc(safety) : ''}</span>`;
+      if (r === 'high') return `<span class="badge red">Tinggi${safety ? ' · ' + esc(safety) : ''}</span>`;
+      return '<span class="badge blue">—</span>';
+    };
+    const priceText = (item) => {
+      if (item.priceBnb === 0) return '0 BNB';
+      if (item.costText) return esc(item.costText.length > 40 ? item.costText.slice(0, 40) + '…' : item.costText);
+      return '—';
+    };
+    const leftText = (item) => {
+      if (item.soldOut) return '<span class="badge red">Habis</span>';
+      if (item.left !== null && item.left !== undefined) return item.supplyMax ? `${Number(item.left).toLocaleString('id-ID')} / ${Number(item.supplyMax).toLocaleString('id-ID')}` : Number(item.left).toLocaleString('id-ID');
+      return '—';
+    };
+    function renderResults() {
+      const q = document.querySelector('#search').value.trim().toLowerCase();
+      const list = radarData.filter((item) => !q || `${item.name || ''} ${item.contract || ''}`.toLowerCase().includes(q));
+      const body = document.querySelector('#resultBody');
+      if (!list.length) {
+        body.innerHTML = `<tr><td colspan="9" class="empty">${radarData.length ? 'Tidak ada project yang cocok dengan pencarian.' : 'Tidak ada freemint yang ditemukan. Coba pindai lagi nanti.'}</td></tr>`;
+        return;
+      }
+      body.innerHTML = list.map((item) => `
+        <tr>
+          <td><strong>${esc(item.name || '—')}</strong>${item.isNew ? ' <span class="badge green">BARU</span>' : ''}${item.findings ? `<br><span class="muted">${esc(item.findings)}</span>` : ''}</td>
+          <td class="mono">${item.contract ? esc(shortAddr(item.contract)) : '—'}</td>
+          <td>${priceText(item)}</td>
+          <td>${leftText(item)}</td>
+          <td>${item.mints !== null && item.mints !== undefined ? Number(item.mints).toLocaleString('id-ID') : '—'}</td>
+          <td>${riskBadge(item.risk, item.safety)}</td>
+          <td class="muted">${esc((item.sources || []).map((s) => s === 'catalog' ? 'katalog' : s).join(', '))}</td>
+          <td class="muted">${fmtWib(item.firstSeen)}</td>
+          <td>${item.links && item.links.bscscan ? `<a class="rowlink" href="${esc(item.links.bscscan)}" target="_blank" rel="noopener noreferrer">BscScan ↗</a>` : ''}${item.links && item.links.datt ? `<br><a class="rowlink" href="${esc(item.links.datt)}" target="_blank" rel="noopener noreferrer">datt.my ↗</a>` : ''}</td>
+        </tr>`).join('');
+    }
+    async function scan() {
+      const button = document.querySelector('#scanButton');
+      const status = document.querySelector('#scanStatus');
+      button.disabled = true;
+      button.textContent = 'Memindai...';
+      status.textContent = 'Memindai koncet, katalog Agent ID Hub, dan datt.my...';
+      try {
+        const res = await fetch('/api/freemint/radar');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        radarData = Array.isArray(data.results) ? data.results : [];
+        const open = radarData.filter((i) => !i.soldOut && (i.left === null || i.left > 0)).length;
+        const free = radarData.filter((i) => i.priceBnb === 0).length;
+        const okSources = Object.values(data.sources || {}).filter((s) => s.ok).length;
+        document.querySelector('#statTotal').textContent = data.total ?? radarData.length;
+        document.querySelector('#statOpen').textContent = open;
+        document.querySelector('#statFree').textContent = free;
+        document.querySelector('#statSources').textContent = `${okSources}/3`;
+        const src = data.sources || {};
+        const fmtSrc = (key, label) => src[key] ? `<span class="${src[key].ok ? 'ok' : 'bad'}">${src[key].ok ? '✓' : '✗'} ${label} (${src[key].count ?? 0})</span>` : '';
+        const catalogNote = src.catalog && src.catalog.generatedAt ? ` · katalog terakhir update ${fmtWib(src.catalog.generatedAt)}` : '';
+        status.innerHTML = `Terakhir dipindai ${fmtWib(data.generatedAt)}. ${fmtSrc('koncet', 'koncet')} · ${fmtSrc('catalog', 'katalog')} · ${fmtSrc('datt', 'datt.my')}${catalogNote}`;
+        renderResults();
+      } catch (error) {
+        status.innerHTML = `<span class="bad">Gagal memindai: ${esc(error.message || 'error tidak dikenal')}. Coba lagi nanti.</span>`;
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Pindai sekarang';
+      }
+    }
+    document.querySelector('#scanButton').addEventListener('click', scan);
+    document.querySelector('#search').addEventListener('input', renderResults);
+    scan();
+  </script>
+</body>
+      </html>
