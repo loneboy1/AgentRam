@@ -1,10 +1,10 @@
 # AgentRam
 
-AgentRam is a lightweight BNB Chain / Agent ID monitoring dashboard and source directory. It combines a dashboard for tracking agent records with a searchable watchlist of public discovery sources for Agent ID-related mint campaigns.
+AgentRam is a lightweight BNB Chain / ERC-8004 agent monitoring dashboard and freemint discovery radar. It combines a dashboard for tracking agent records with a searchable directory of public discovery sources and a live radar of current BSC freemint NFT projects.
 
 > **Status:** Community monitoring and research project. Source listings are discovery leads, not endorsements, investment advice, or proof that a campaign is current, safe, or free.
 
-> **Note:** The dashboard has no login. Anyone with the link can view and edit the tracked agent records, so do not use it for private or sensitive data.
+> **Note:** The dashboard has no login. Anyone with the link can view the site. The watchlist itself is stored per person in the browser's local storage, so each visitor keeps their own list — but do not use it for private or sensitive data.
 
 ## Live demo
 
@@ -12,20 +12,21 @@ AgentRam is a lightweight BNB Chain / Agent ID monitoring dashboard and source d
 
 ## Pages
 
-- [`index.html`](index.html) — dashboard UI for agent records, status/risk/trust summaries, search, sidebar menus, and the BNB Agent Lookup panel.
-- [`watchlist.html`](watchlist.html) — searchable source directory with category and manual-check filters. Manual check state is stored in the browser's local storage.
+- [`index.html`](index.html) — dashboard: agent watchlist (starts empty, per-person), status/risk/trust summaries, search, sidebar menus, BNB Agent Lookup panel, Freemint terbaru, and on-chain detail dialogs.
+- [`watchlist.html`](watchlist.html) — "Jelajahi Agent": searchable directory of 32 discovery sources for Agent ID mints and BSC freemints, with category chips and live stats.
+- [`freemint.html`](freemint.html) — "Radar Freemint": live scan of current BSC freemint NFT projects, sorted by project birth, with a BARU badge for projects born less than 6 hours ago.
 - [`about.html`](about.html) — project scope, workflow, and safety notes.
-
-The watchlist includes Agent ID catalogs, mint calendars, community feeds, search links, blockchain explorers, research tools, and example campaign/project repositories. Unknown or unstable links (such as the specific trycloudflare Agent Radar URL and canonical Boltbook URL) are identified as search placeholders rather than official links.
 
 ## Features
 
-- Agent registry dashboard with add, edit, delete, search, and JSON export.
-- Status, risk, and trust summaries for tracked agent records.
-- Sidebar menus: Overview (reset view), Agents (jump to the table), Alerts (show Alert agents only), Reports (export JSON), Audit (sync log per agent).
-- BNB Agent Lookup panel: search the 8004scan indexer by agent ID, wallet, or name on BSC mainnet (chain 56) or testnet (chain 97). Results show a Freemint badge when an agent looks like a freemint/launchpad campaign, and a "+ Pantau" button adds a found agent to the watchlist.
-- Searchable source directory with category filters and locally saved manual review status.
-- Direct links to discovery and verification resources, including Agent ID Hub, BscScan, BNB Chain explorers, calendars, and social/search feeds.
+- **Watchlist from zero, live only:** agents enter the list only through the BNB Agent Lookup (+ Pantau) — no manual typing, no seed data. Entries are validated and stored in `localStorage` (`agentram-watchlist-v1`).
+- **BNB Agent Lookup:** one "Cari agent" field auto-detects an agent ID (digits), a wallet (`0x...`), or a name, and queries the 8004scan indexer on BSC mainnet (chain 56) or testnet (chain 97). Results show a Freemint badge when an agent looks like a freemint/launchpad campaign.
+- **Freemint terbaru (agent IDs):** scans the newest ~1,000 agents on the indexer for freemint keyword candidates (usually 10–20 hits, ~1–2% match). A keyword hit is a lead, not a verified free mint.
+- **Detail on-chain:** per-agent dialog with live data from the indexer (owner, ENS/username, image, description, verified badge, stars, scores, rank, protocols, x402, registration date) plus BscScan/8004scan links.
+- **Import / Export JSON:** back up the watchlist to a file and restore it later. Import validates every entry, skips duplicates, and reports imported / duplicate / invalid counts.
+- **Bulk delete** with an in-page confirm dialog; single-column search; status, risk, and trust summaries.
+- **Radar Freemint (NFT):** `GET /api/freemint/radar` merges three no-key sources — koncet live mint feed (`ai.koncet.xyz`, price 0 BNB only), the Agent ID Hub project catalog (cached 1 hour), and the datt.my MintRadar table (with safety badges) — dedupes by contract address, sorts by project birth, and returns up to 75 results. The radar is discovery-only: it does not filter or vet projects.
+- **Jelajahi Agent:** 32 curated sources (Agent ID Hub, datt.my MintRadar, mint calendars, explorers, community feeds, search links, research repos). Dead or discontinued links are removed, not listed.
 
 ## Run locally
 
@@ -37,11 +38,11 @@ npm start
 
 Then open http://localhost:3000 — `server.js` serves both the API and the static frontend, so no separate static server is needed. The frontend calls the API at the relative path `/api`.
 
-Agent records are stored in a JSON file on the server (`/tmp/agents.json`, seeded with 3 example agents). On serverless hosting the data does not persist across restarts — use a real database for anything permanent.
+Agent records live only in each visitor's browser (local storage). The server keeps no agent data, so nothing persists server-side — use a real database for anything permanent.
 
 ## GitHub Pages
 
-GitHub Pages can serve the static HTML pages, but it does not run the Node API. Therefore the dashboard's API-dependent features (saved agent records, BNB lookup) require a separately hosted backend and a configured frontend API URL. The static watchlist and About page work without the API. To enable Pages, configure the repository under **Settings → Pages** and choose a supported publishing source/workflow.
+GitHub Pages can serve the static HTML pages, but it does not run the Node API. Therefore the dashboard's API-dependent features (BNB lookup, Freemint terbaru, Radar Freemint) require a separately hosted backend and a configured frontend API URL. The static Jelajahi Agent page and About page work without the API. To enable Pages, configure the repository under **Settings → Pages** and choose a supported publishing source/workflow.
 
 ## Reviewing a source or campaign
 
@@ -55,14 +56,16 @@ AgentRam does not automatically monitor every external site, validate campaign c
 
 ## Repository map
 
+```
 ├── about.html       # Project overview and safety notes
-├── agents.json      # Example agent data (served statically)
 ├── dashboard.js     # Dashboard frontend behavior
-├── data/            # Local data folder (API records currently live in /tmp/agents.json)
+├── freemint.html    # Radar Freemint page
 ├── index.html       # Dashboard page
+├── package.json     # Node metadata (dotenv only)
+├── README.md        # This file
 ├── server.js        # Node API + static file server
 ├── styles.css       # Dashboard styles
-└── watchlist.html   # Searchable source directory
+└── watchlist.html   # Jelajahi Agent source directory
 ```
 
 ## Disclaimer
