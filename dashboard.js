@@ -2,6 +2,7 @@ const API_URL = '/api';
 const statusFilters = ['All', 'Active', 'Pending', 'Alert'];
 let agents = [];
 let selectedStatus = 'All';
+let selectedAgentIds = new Set();
 let toastTimer;
 
 const $ = (selector) => document.querySelector(selector);
@@ -185,12 +186,14 @@ function renderTable() {
   const body = $('#agentTableBody');
 
   if (!filteredAgents.length) {
-    body.innerHTML = '<tr><td colspan="9" class="empty-row">Tidak ada agent yang cocok.</td></tr>';
+    body.innerHTML = '<tr><td colspan="10" class="empty-row">Tidak ada agent yang cocok.</td></tr>';
+    syncSelectionUI();
     return;
   }
 
   body.innerHTML = filteredAgents.map((agent) => `
     <tr>
+      <td><input type="checkbox" class="row-select" data-id="${escapeHTML(agent.id)}" ${selectedAgentIds.has(agent.id) ? 'checked' : ''} /></td>
       <td><strong>${escapeHTML(agent.id)}</strong></td>
       <td>${escapeHTML(agent.name)}</td>
       <td>${escapeHTML(agent.wallet || '—')}</td>
@@ -206,6 +209,7 @@ function renderTable() {
       </td>
     </tr>
   `).join('');
+  syncSelectionUI();
 }
 
 function refreshDashboard() {
@@ -496,6 +500,41 @@ async function handleBnbAdd(event) {
   }
 }
 
+function syncSelectionUI() {
+  const visibleIds = Array.from(document.querySelectorAll('#agentTableBody .row-select')).map((box) => box.dataset.id);
+  const selectAll = $('#selectAllCheckbox');
+  if (selectAll) {
+    selectAll.checked = visibleIds.length > 0 && visibleIds.every((id) => selectedAgentIds.has(id));
+  }
+  const deleteButton = $('#deleteSelectedButton');
+  if (deleteButton) {
+    deleteButton.disabled = selectedAgentIds.size === 0;
+    deleteButton.textContent = selectedAgentIds.size > 0 ? `Hapus yang dipilih (${selectedAgentIds.size})` : 'Hapus yang dipilih';
+  }
+}
+
+async function handleDeleteSelected() {
+  if (!selectedAgentIds.size) return;
+  const count = selectedAgentIds.size;
+  if (!confirm(`Hapus ${count} agent yang dipilih?`)) return;
+
+  const ids = Array.from(selectedAgentIds);
+  let deleted = 0;
+  for (const id of ids) {
+    try {
+      await apiRequest(`/agents?id=${encodeURIComponent(id)}`, 'DELETE');
+      deleted += 1;
+    } catch (error) {
+      console.warn('Gagal menghapus', id, error.message);
+    }
+  }
+
+  selectedAgentIds.clear();
+  agents = await loadAgents();
+  refreshDashboard();
+  showToast(deleted === count ? `${deleted} agent dihapus.` : `${deleted} dari ${count} agent dihapus.`);
+}
+
 async function initDashboard() {
   agents = await loadAgents();
   refreshDashboard();
@@ -509,29 +548,21 @@ async function init() {
   $('#exportButton').addEventListener('click', exportAgents);
   $('#agentForm').addEventListener('submit', handleSubmit);
   $('#agentTableBody').addEventListener('click', handleTableAction);
-  $('#closeDialogButton').addEventListener('click', () => $('#agentDialog').close());
-  $('#cancelDialogButton').addEventListener('click', () => $('#agentDialog').close());
-  $('#closeDetailDialogButton').addEventListener('click', () => $('#agentDetailDialog').close());
-  $('#detailCloseButton').addEventListener('click', () => $('#agentDetailDialog').close());
-  $('#agentDialog').addEventListener('click', (event) => {
-    if (event.target === $('#agentDialog')) $('#agentDialog').close();
+  $('#agentTableBody').addEventListener('change', (event) => {
+    const box = event.target.closest('.row-select');
+    if (!box) return;
+    if (box.checked) selectedAgentIds.add(box.dataset.id);
+    else selectedAgentIds.delete(box.dataset.id);
+    syncSelectionUI();
   });
-  $('#agentDetailDialog').addEventListener('click', (event) => {
-    if (event.target === $('#agentDetailDialog')) $('#agentDetailDialog').close();
-  });
-  $('#bnbLookupForm').addEventListener('submit', handleBnbLookup);
-  $('#bnbLookupResults').addEventListener('click', handleBnbAdd);
-  document.querySelectorAll('.nav a[data-menu]').forEach((link) => {
-    link.addEventListener('click', (event) => {
-      event.preventDefault();
-      handleMenuAction(link.dataset.menu);
+  $('#selectAllCheckbox').addEventListener('change', (event) => {
+    document.querySelectorAll('#agentTableBody .row-select').forEach((box) => {
+      box.checked = event.target.checked;
+      if (event.target.checked) selectedAgentIds.add(box.dataset.id);
+      else selectedAgentIds.delete(box.dataset.id);
     });
+    syncSelectionUI();
   });
-  $('#closeAuditDialogButton').addEventListener('click', () => $('#auditDialog').close());
-  $('#auditCloseButton').addEventListener('click', () => $('#auditDialog').close());
-  $('#auditDialog').addEventListener('click', (event) => {
-    if (event.target === $('#auditDialog')) $('#auditDialog').close();
-  });
-}
-
-init();
+  $('#deleteSelectedButton').addEventListener('click', handleDeleteSelected);
+  $('#closeDialogButton').addEventListener('click', () => $('#agentDialog').close());
+  $('#cancelDialogButton').addEve
