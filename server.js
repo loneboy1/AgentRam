@@ -87,6 +87,32 @@ function normalizeAgentLookup(item) {
 
   const freemintCandidate = /(freemint|free[-\s]?mint|minting|launchpad|campaign)/i.test(textBlob);
 
+  const detail = {
+    compositeId: item?.agent_id ?? '',
+    contractAddress: item?.contract_address ?? item?.registryContract ?? item?.registry_contract ?? '',
+    ownerEns: item?.owner_ens ?? null,
+    ownerUsername: item?.owner_username ?? null,
+    ownerAvatarUrl: item?.owner_avatar_url ?? null,
+    ownerPublisherTier: item?.owner_publisher_tier ?? null,
+    ownerCertifiedName: item?.owner_certified_name ?? null,
+    imageUrl: item?.image_url ?? '',
+    isVerified: Boolean(item?.is_verified),
+    starCount: Number(item?.star_count ?? 0),
+    supportedProtocols: Array.isArray(item?.supported_protocols) ? item.supported_protocols : [],
+    x402Supported: Boolean(item?.x402_supported),
+    totalScore: item?.total_score ?? null,
+    rank: item?.rank ?? null,
+    networkRank: item?.network_rank ?? null,
+    healthScore: item?.health_score ?? null,
+    totalFeedbacks: Number(item?.total_feedbacks ?? 0),
+    averageScore: item?.average_score ?? null,
+    crossChainVersions: Array.isArray(item?.cross_chain_versions) ? item.cross_chain_versions : [],
+    createdAt: item?.created_at ?? null,
+    updatedAt: item?.updated_at ?? null,
+    chainId: item?.chain_id ?? null,
+    chainType: item?.chain_type ?? ''
+  };
+
   return {
     agentId: tokenId !== null && tokenId !== undefined ? Number(tokenId) : null,
     name,
@@ -97,6 +123,7 @@ function normalizeAgentLookup(item) {
     decodedAgentUri,
     freemintCandidate,
     description,
+    detail,
     source: '8004scan indexer',
     raw: item
   };
@@ -154,6 +181,62 @@ async function lookupBnbAgent({ agentId, wallet, name, network = 'bsc-mainnet' }
     matched: filtered.length,
     results: filtered.slice(0, 25),
     source: '8004scan indexer'
+  };
+}
+
+// Detail satu agent: pakai parameter search indexer (cocok persis untuk
+// ID maupun nama). Kalau search tidak mengembalikan yang persis, pindai
+// halaman terbaru (ID menurun) sampai ketemu atau sampai halaman sudah
+// di bawah ID yang dicari — maks 10 halaman (1000 agent).
+async function fetchBnbAgentById({ network = 'bsc-mainnet', agentId }) {
+  const networkName = BNB_NETWORKS[network] ? network : 'bsc-mainnet';
+  const networkCfg = BNB_NETWORKS[networkName];
+  const wanted = String(agentId);
+
+  const searchUrl = new URL(`${networkCfg.scanApi}/agents`);
+  searchUrl.searchParams.set('chain_id', String(networkCfg.chainId));
+  searchUrl.searchParams.set('search', wanted);
+  searchUrl.searchParams.set('limit', '25');
+  searchUrl.searchParams.set('offset', '0');
+
+  const searchResponse = await fetch(searchUrl.toString(), {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(30000)
+  });
+  if (!searchResponse.ok) {
+    throw new Error(`8004scan API request failed: ${searchResponse.status} ${searchResponse.statusText}`);
+  }
+  const searchData = await searchResponse.json();
+  const searchItems = Array.isArray(searchData?.items) ? searchData.items : [];
+  const exact = searchItems.map(normalizeAgentLookup).find((item) => String(item.agentId) === wanted);
+  if (exact) {
+    return {
+      network: networkName,
+      registryContract: networkCfg.registryContract,
+      total: Number(searchData?.total ?? 0),
+      result: exact
+    };
+  }
+
+  let scanned = 0;
+  for (let page = 0; page < 10; page++) {
+    const { items, total } = await fetchBnbAgents(networkName, page * 100, 100);
+    scanned += items.length;
+    const found = items.find((item) => String(item.agentId) === wanted);
+    if (found) {
+      return { network: networkName, registryContract: networkCfg.registryContract, total, result: found };
+    }
+    if (!items.length || items.length < 100) break;
+    const maxId = Math.max(...items.map((item) => Number(item.agentId)).filter(Number.isFinite));
+    if (Number.isFinite(maxId) && maxId < Number(wanted)) break;
+  }
+
+  return {
+    network: networkName,
+    registryContract: networkCfg.registryContract,
+    total: Number(searchData?.total ?? 0),
+    scanned,
+    result: null
   };
 }
 
@@ -261,6 +344,30 @@ const server = http.createServer(async (req, res) => {
     }
 
     sendJson(res, 405, { message: 'Method not allowed' });
+    return;
+  }
+
+  if (parsedUrl.pathname === '/api/bnb/agent') {
+    if (req.method !== 'GET') {
+      sendJson(res, 405, { message: 'Method not allowed' });
+      return;
+    }
+    try {
+      const agentId = parsedUrl.searchParams.get('agentId');
+      const network = parsedUrl.searchParams.get('network') || 'bsc-mainnet';
+      if (!agentId || !/^\d+$/.test(agentId)) {
+        sendJson(res, 400, { message: 'agentId wajib diisi (angka)' });
+        return;
+      }
+      const result = await fetchBnbAgentById({ network, agentId });
+      if (!result.result) {
+        sendJson(res, 404, { message: 'Agent tidak ditemukan di indexer' });
+        return;
+      }
+      sendJson(res, 200, { ...result, matched: 1, source: '8004scan indexer' });
+    } catch (error) {
+      sendJson(res, 500, { message: error.message || 'BNB agent detail failed' });
+    }
     return;
   }
 
