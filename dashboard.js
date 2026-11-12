@@ -800,7 +800,82 @@ async function handleDeleteSelected() {
   refreshDashboard();
   showToast(`${count} agent dihapus.`);
 }
+// Import backup: baca file agents.json hasil Export, validasi tiap entri
+// dengan aturan yang sama seperti loadWatchlist, lewati duplikat (ID sudah
+// ada) supaya catatan lokal yang sudah diedit tidak tertimpa.
+function planAgentImport(data, existingAgents) {
+  const list = Array.isArray(data) ? data : Array.isArray(data?.agents) ? data.agents : null;
+  if (!list) return { error: 'Format file tidak dikenal: harus berisi daftar agent (array) atau { "agents": [...] }.' };
 
+  const existingIds = new Set(existingAgents.map((agent) => agent.id));
+  const seenInFile = new Set();
+  const toImport = [];
+  const duplicates = [];
+  const invalid = [];
+
+  for (const entry of list) {
+    if (!validAgent(entry)) {
+      invalid.push(entry);
+      continue;
+    }
+    if (existingIds.has(entry.id) || seenInFile.has(entry.id)) {
+      duplicates.push(entry);
+      continue;
+    }
+    seenInFile.add(entry.id);
+    toImport.push(entry);
+  }
+
+  return { toImport, duplicates, invalid };
+}
+
+function showImportSummary({ toImport, duplicates, invalid }) {
+  const rows = [];
+  const addRow = (label, value) => rows.push(`<div class="detail-item"><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong></div>`);
+  addRow('Diimpor', String(toImport.length));
+  addRow('Dilewati (duplikat)', String(duplicates.length));
+  addRow('Tidak valid', String(invalid.length));
+  if (toImport.length) {
+    addRow('Agent yang diimpor', toImport.map((agent) => `${agent.id} (${agent.name})`).join(', '));
+  }
+  if (duplicates.length) {
+    addRow('Duplikat yang dilewati', duplicates.map((agent) => agent.id).join(', '));
+  }
+  $('#auditTitle').textContent = 'Hasil Import Backup';
+  $('#auditContent').innerHTML = `<div class="detail-grid">${rows.join('')}</div>`;
+  $('#auditDialog').showModal();
+}
+
+async function handleImportFile(event) {
+  const input = event.target;
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch (error) {
+    showToast('File bukan JSON yang valid.');
+    return;
+  }
+
+  const plan = planAgentImport(data, agents);
+  if (plan.error) {
+    showToast(plan.error);
+    return;
+  }
+  if (!plan.toImport.length && !plan.duplicates.length && !plan.invalid.length) {
+    showToast('File backup kosong — tidak ada agent di dalamnya.');
+    return;
+  }
+
+  agents.push(...plan.toImport);
+  saveWatchlist();
+  refreshDashboard();
+  showImportSummary(plan);
+  showToast(plan.toImport.length ? `${plan.toImport.length} agent diimpor.` : 'Tidak ada agent baru yang diimpor.');
+}
 function initDashboard() {
   agents = loadWatchlist();
   refreshDashboard();
@@ -811,6 +886,8 @@ function init() {
 
   $('#searchInput').addEventListener('input', renderTable);
   $('#exportButton').addEventListener('click', exportAgents);
+  $('#importButton').addEventListener('click', () => $('#importFileInput').click());
+  $('#importFileInput').addEventListener('change', handleImportFile);
   $('#agentForm').addEventListener('submit', handleSubmit);
   $('#agentTableBody').addEventListener('click', handleTableAction);
   $('#agentTableBody').addEventListener('change', (event) => {
