@@ -504,6 +504,35 @@ async function handleBnbLookup(event) {
   }
 }
 
+async function handleBnbFreemint() {
+  const network = $('#bnbNetwork').value;
+  const button = $('#bnbFreemintButton');
+  const lookupButton = $('#bnbLookupButton');
+  button.disabled = true;
+  lookupButton.disabled = true;
+  button.textContent = 'Mencari...';
+  $('#bnbResultCount').textContent = 'Mencari...';
+  $('#bnbLookupResults').innerHTML = '<p class="empty-row">Memindai agent terbaru di indexer 8004scan...</p>';
+
+  try {
+    const result = await fetchJson(`/api/bnb/freemint?network=${encodeURIComponent(network)}&limit=25`);
+    bnbResults = Array.isArray(result?.results) ? result.results : [];
+    $('#bnbResultCount').textContent = bnbResults.length
+      ? `${bnbResults.length} freemint terbaru`
+      : 'Tidak ada freemint terbaru';
+    renderBnbResults(bnbResults);
+  } catch (error) {
+    bnbResults = [];
+    $('#bnbResultCount').textContent = 'Gagal';
+    $('#bnbLookupResults').innerHTML = '<p class="empty-row">Gagal memuat freemint terbaru. Coba lagi nanti.</p>';
+    showToast(error.message || 'Gagal memuat freemint terbaru.');
+  } finally {
+    button.disabled = false;
+    lookupButton.disabled = false;
+    button.textContent = 'Freemint terbaru';
+  }
+}
+
 function handleBnbAdd(event) {
   const button = event.target.closest('button[data-bnb-index]');
   if (!button) return;
@@ -606,6 +635,7 @@ function init() {
   });
   $('#confirmDialog').addEventListener('cancel', () => closeConfirm(false));
   $('#bnbLookupForm').addEventListener('submit', handleBnbLookup);
+  $('#bnbFreemintButton').addEventListener('click', handleBnbFreemint);
   $('#bnbLookupResults').addEventListener('click', handleBnbAdd);
   document.querySelectorAll('.nav a[data-menu]').forEach((link) => {
     link.addEventListener('click', (event) => {
