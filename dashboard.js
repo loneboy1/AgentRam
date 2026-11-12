@@ -272,8 +272,150 @@ function openDialog(agent) {
   $('#agentName').focus();
 }
 
-function openDetailModal(agent) {
-  $('#detailContent').innerHTML = `
+let detailRequestToken = 0;
+
+function formatWibDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  }) + ' WIB';
+}
+
+function onChainLinks(item) {
+  const id = item?.agentId;
+  const network = item?.network || 'bsc-mainnet';
+  const isTestnet = network === 'bsc-testnet';
+  const chainId = isTestnet ? 97 : 56;
+  const scanHost = isTestnet ? 'testnet.bscscan.com' : 'bscscan.com';
+  const registry = item?.registryContract || item?.detail?.contractAddress || '';
+  const owner = item?.ownerAddress || '';
+  const links = [];
+  if (id !== null && id !== undefined) {
+    links.push(`<a href="https://www.8004scan.io/agents/${chainId}/${encodeURIComponent(id)}" target="_blank" rel="noopener">8004scan</a>`);
+  }
+  if (registry) {
+    const tokenSuffix = id !== null && id !== undefined ? `?a=${encodeURIComponent(id)}` : '';
+    links.push(`<a href="https://${scanHost}/token/${registry}${tokenSuffix}" target="_blank" rel="noopener">BscScan Token</a>`);
+  }
+  if (owner) {
+    links.push(`<a href="https://${scanHost}/address/${owner}" target="_blank" rel="noopener">BscScan Owner</a>`);
+  }
+  return links.join(' · ') || '—';
+}
+
+function renderOnChainDetail(item) {
+  if (!item) return '<p class="empty-row">Data on-chain tidak tersedia.</p>';
+  const detail = item.detail || {};
+  const verified = detail.isVerified
+    ? '<span class="badge green">Terverifikasi</span>'
+    : '<span class="badge blue">Belum terverifikasi</span>';
+  const freemint = item.freemintCandidate
+    ? '<span class="badge green">Freemint</span>'
+    : '<span class="badge blue">—</span>';
+  const protocols = (detail.supportedProtocols || []).join(', ') || '—';
+  const versions = (detail.crossChainVersions || []).map((version) => {
+    if (version && typeof version === 'object') return String(version.chain_id ?? version.chainId ?? version.network ?? '');
+    return String(version ?? '');
+  }).filter(Boolean).join(', ') || '—';
+  const ownerLabel = [detail.ownerUsername, detail.ownerEns].filter(Boolean).join(' · ') || '—';
+  const image = detail.imageUrl
+    ? `<div class="detail-item wide-item"><span>Gambar Agent</span><strong><img src="${escapeHTML(detail.imageUrl)}" alt="" style="width:64px;height:64px;border-radius:12px;object-fit:cover" /></strong></div>`
+    : '';
+
+  return `
+    <div class="detail-grid">
+      ${image}
+      <div class="detail-item">
+        <span>Agent ID</span>
+        <strong>${item.agentId !== null && item.agentId !== undefined ? escapeHTML(String(item.agentId)) : '—'}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Nama</span>
+        <strong>${escapeHTML(item.name || '—')}</strong>
+      </div>
+      <div class="detail-item wide-item">
+        <span>Deskripsi</span>
+        <strong>${escapeHTML(item.description || detail.description || '—')}</strong>
+      </div>
+      <div class="detail-item wide-item">
+        <span>Owner</span>
+        <strong style="word-break:break-all">${escapeHTML(item.ownerAddress || '—')}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Owner (ENS / Username)</span>
+        <strong>${escapeHTML(ownerLabel)}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Registry Contract</span>
+        <strong style="word-break:break-all">${escapeHTML(detail.contractAddress || item.registryContract || '—')}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Terdaftar</span>
+        <strong>${escapeHTML(formatWibDate(detail.createdAt))}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Terakhir Update</span>
+        <strong>${escapeHTML(formatWibDate(detail.updatedAt))}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Freemint</span>
+        <strong>${freemint}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Status Verifikasi</span>
+        <strong>${verified}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Bintang</span>
+        <strong>${Number(detail.starCount || 0)}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Protokol</span>
+        <strong>${escapeHTML(protocols)}</strong>
+      </div>
+      <div class="detail-item">
+        <span>x402</span>
+        <strong>${detail.x402Supported ? 'Didukung' : '—'}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Skor Total</span>
+        <strong>${detail.totalScore !== null && detail.totalScore !== undefined ? escapeHTML(String(detail.totalScore)) : '—'}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Health Score</span>
+        <strong>${detail.healthScore !== null && detail.healthScore !== undefined ? escapeHTML(String(detail.healthScore)) : '—'}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Rank</span>
+        <strong>${detail.rank !== null && detail.rank !== undefined ? escapeHTML(String(detail.rank)) : '—'}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Network Rank</span>
+        <strong>${detail.networkRank !== null && detail.networkRank !== undefined ? escapeHTML(String(detail.networkRank)) : '—'}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Feedback</span>
+        <strong>${Number(detail.totalFeedbacks || 0)} ulasan${detail.averageScore !== null && detail.averageScore !== undefined ? ` · rata-rata ${escapeHTML(String(detail.averageScore))}` : ''}</strong>
+      </div>
+      <div class="detail-item">
+        <span>Cross-Chain</span>
+        <strong>${escapeHTML(versions)}</strong>
+      </div>
+      <div class="detail-item wide-item">
+        <span>Lihat di Explorer</span>
+        <strong>${onChainLinks(item)}</strong>
+      </div>
+    </div>
+  `;
+}
+
+function renderLocalDetail(agent) {
+  return `
+    <p class="eyebrow">Catatan Pantauan (lokal)</p>
+    <h3>Data Pantauan</h3>
     <div class="detail-grid">
       <div class="detail-item">
         <span>Agent ID</span>
@@ -309,7 +451,65 @@ function openDetailModal(agent) {
       </div>
     </div>
   `;
+}
+
+function openDetailModal(agent) {
+  const token = ++detailRequestToken;
+  $('#detailTitle').textContent = `Detail Agent ${agent.id}`;
+  $('#detailContent').innerHTML = `
+    ${renderLocalDetail(agent)}
+    <div id="onChainDetail" style="margin-top:16px">
+      <p class="eyebrow">On-Chain · Live dari indexer</p>
+      <h3>Detail On-Chain</h3>
+      <p class="empty-row">Memuat data on-chain...</p>
+    </div>
+  `;
   $('#agentDetailDialog').showModal();
+  loadOnChainIntoDialog(agent.id, token);
+}
+
+async function loadOnChainIntoDialog(agentId, token) {
+  try {
+    const result = await fetchJson(`/api/bnb/agent?agentId=${encodeURIComponent(agentId)}&network=bsc-mainnet`);
+    if (token !== detailRequestToken) return;
+    const section = $('#onChainDetail');
+    if (!section || !$('#agentDetailDialog').open) return;
+    section.innerHTML = `
+      <p class="eyebrow">On-Chain · Live dari indexer</p>
+      <h3>Detail On-Chain</h3>
+      ${renderOnChainDetail(result?.result || null)}
+    `;
+  } catch (error) {
+    if (token !== detailRequestToken) return;
+    const section = $('#onChainDetail');
+    if (!section || !$('#agentDetailDialog').open) return;
+    section.innerHTML = `
+      <p class="eyebrow">On-Chain · Live dari indexer</p>
+      <h3>Detail On-Chain</h3>
+      <p class="empty-row">Gagal memuat data on-chain: ${escapeHTML(error.message || 'coba lagi nanti.')}</p>
+    `;
+  }
+}
+
+function openBnbDetail(item) {
+  detailRequestToken++;
+  const inList = agents.some((agent) => agent.id === String(item.agentId));
+  $('#detailTitle').textContent = `Detail Agent ${item.agentId}`;
+  $('#detailContent').innerHTML = `
+    <p class="eyebrow">On-Chain · Live dari indexer</p>
+    <h3>Detail On-Chain</h3>
+    ${renderOnChainDetail(item)}
+    <p class="empty-row" style="margin-top:12px">${inList ? 'Agent ini sudah ada di daftar pantauan.' : 'Agent ini belum ada di daftar pantauan.'}</p>
+    ${inList ? '' : '<button class="primary-btn" type="button" id="detailAddButton">+ Pantau agent ini</button>'}
+  `;
+  $('#agentDetailDialog').showModal();
+  const addButton = $('#detailAddButton');
+  if (addButton) {
+    addButton.addEventListener('click', () => {
+      addBnbAgent(item);
+      $('#agentDetailDialog').close();
+    });
+  }
 }
 
 function handleSubmit(event) {
@@ -456,6 +656,7 @@ function renderBnbResults(results) {
               <td>${escapeHTML(shortWallet(item.ownerAddress))}</td>
               <td>${item.freemintCandidate ? '<span class="badge green">Freemint</span>' : '<span class="badge blue">—</span>'}</td>
               <td class="row-actions">
+                <button class="action-btn" type="button" data-bnb-detail="${index}" ${item.agentId === null || item.agentId === undefined ? 'disabled' : ''}>Detail</button>
                 <button class="action-btn" type="button" data-bnb-index="${index}" ${item.agentId === null || item.agentId === undefined ? 'disabled' : ''}>+ Pantau</button>
               </td>
             </tr>
@@ -533,16 +734,13 @@ async function handleBnbFreemint() {
   }
 }
 
-function handleBnbAdd(event) {
-  const button = event.target.closest('button[data-bnb-index]');
-  if (!button) return;
-  const item = bnbResults[Number(button.dataset.bnbIndex)];
-  if (!item || item.agentId === null || item.agentId === undefined) return;
+function addBnbAgent(item) {
+  if (!item || item.agentId === null || item.agentId === undefined) return false;
 
   const id = String(item.agentId);
   if (agents.some((agent) => agent.id === id)) {
     showToast(`Agent ${id} sudah ada di daftar pantauan.`);
-    return;
+    return false;
   }
 
   const agent = {
@@ -560,6 +758,20 @@ function handleBnbAdd(event) {
   saveWatchlist();
   refreshDashboard();
   showToast(`Agent ${id} ditambahkan ke pantauan.`);
+  return true;
+}
+
+function handleBnbAdd(event) {
+  const detailButton = event.target.closest('button[data-bnb-detail]');
+  if (detailButton) {
+    const item = bnbResults[Number(detailButton.dataset.bnbDetail)];
+    if (item) openBnbDetail(item);
+    return;
+  }
+  const button = event.target.closest('button[data-bnb-index]');
+  if (!button) return;
+  const item = bnbResults[Number(button.dataset.bnbIndex)];
+  if (item) addBnbAgent(item);
 }
 
 function syncSelectionUI() {
