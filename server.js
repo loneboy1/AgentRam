@@ -303,6 +303,227 @@ async function listLatestFreemint({ network = 'bsc-mainnet', limit = 25 } = {}) 
     results,
     source: '8004scan indexer'
   };
+      }
+// ---- Freemint radar (NFT): gabungan 3 sumber no-key ----
+// koncet = feed mint live (price_bnb == 0), Agent ID Hub = katalog
+// proyek (cache 1 jam, 4,9 MB), datt.my = tabel MintRadar + safety.
+// Tiap sumber dibungkus try/catch (Promise.allSettled) supaya satu
+// sumber mati tidak menggagalkan seluruh radar.
+const KONCET_BASE = 'https://ai.koncet.xyz';
+const AGENTIDHUB_CATALOG_URL = 'https://agentidhub.eth.limo/project-catalog.js';
+const DATT_BASE = 'https://datt.my';
+const CATALOG_TTL_MS = 60 * 60 * 1000;
+let radarCatalogCache = { at: 0, data: null };
+
+async function fetchWithTimeout(url, { timeoutMs = 15000 } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'AgentRam-radar/1.0' } });
+    if (!response.ok) throw new Error(`HTTP ${response.status} dari ${url}`);
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function normRadarName(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function radarRiskRank(risk) {
+  const rank = { low: 0, medium: 1, high: 2, unknown: 3 }[String(risk || 'unknown').toLowerCase()];
+  return rank === undefined ? 3 : rank;
+}
+
+async function fetchKoncetRadar() {
+  const [feed, contracts] = await Promise.all([
+    (await fetchWithTimeout(`${KONCET_BASE}/api/pulse/feed?limit=200`)).json(),
+    (await fetchWithTimeout(`${KONCET_BASE}/api/pulse/contracts?limit=100`)).json()
+  ]);
+  const byContract = new Map();
+  for (const entry of Array.isArray(contracts) ? contracts : []) {
+    if (entry && entry.contract) byContract.set(String(entry.contract).toLowerCase(), entry);
+  }
+  const items = [];
+  const seen = new Set();
+  for (const entry of Array.isArray(feed) ? feed : []) {
+    if (!entry || !entry.contract) continue;
+    if (Number(entry.price_bnb) !== 0) continue;
+    const contract = String(entry.contract).toLowerCase();
+    if (seen.has(contract)) continue;
+    seen.add(contract);
+    const agg = byContract.get(contract) || {};
+    const supply = agg.supply ?? null;
+    const supplyMax = agg.supply_max ?? null;
+    // Sisa supply langsung dari agregat (fallback hitung manual).
+    const left = (agg.left !== null && agg.left !== undefined) ? agg.left
+      : (supply !== null && supplyMax !== null) ? Math.max(supplyMax - supply, 0) : null;
+    const soldOut = agg.sold_out === 1 || agg.sold_out === true || (left !== null && left <= 0);
+    // firstSeen = KELAHIRAN project (mint pertama yang terindeks), bukan
+    // mint terakhir — supaya daftar ini project yang FRESH, bukan project
+    // lama yang kebetulan baru di-mint lagi.
+    const birthTs = agg.first_indexed_mint_ts ?? null;
+    items.push({
+      contract,
+      name: entry.contract_name || agg.name || contract,
+      priceBnb: 0,
+      priceSamples: entry.price_samples ?? agg.price_samples ?? null,
+      supply, supplyMax, left, soldOut,
+      mints: agg.agent_mints ?? entry.contract_mints ?? null,
+      risk: 'unknown',
+      safety: null,
+      findings: null,
+      firstSeen: birthTs ? new Date(Number(birthTs) * 1000).toISOString()
+        : entry.ts ? new Date(Number(entry.ts) * 1000).toISOString() : null,
+      lastMint: entry.ts ? new Date(Number(entry.ts) * 1000).toISOString() : null,
+      sources: ['koncet']
+    });
+  }
+  return items;
+}
+
+async function fetchCatalogRadar() {
+  const now = Date.now();
+  if (!radarCatalogCache.data || now - radarCatalogCache.at > CATALOG_TTL_MS) {
+    const text = await (await fetchWithTimeout(AGENTIDHUB_CATALOG_URL, { timeoutMs: 30000 })).text();
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start === -1 || end <= start) throw new Error('Format katalog Agent ID Hub tidak dikenal');
+    radarCatalogCache = { at: now, data: JSON.parse(text.slice(start, end + 1)) };
+  }
+  const data = radarCatalogCache.data;
+  const projects = Array.isArray(data?.projects) ? data.projects : [];
+  const freeRe = /free|免费|gas only|gas-only/i;
+  const items = [];
+  for (const project of projects) {
+    const verdict = project?.verdict || {};
+    if (verdict.phase !== 'active') continue;
+    if (String(verdict.risk || '').toLowerCase() === 'high') continue;
+    const costText = `${(verdict.cost && verdict.cost.en) || ''} ${(verdict.cost && verdict.cost.zh) || ''}`.trim();
+    if (!freeRe.test(costText)) continue;
+    const progress = project?.mintProgress || null;
+    if (!progress) continue;
+    const minted = Number(progress.minted);
+    const supply = Number(progress.supply);
+    if (Number.isFinite(minted) && Number.isFinite(supply) && supply > 0 && minted >= supply) continue;
+    items.push({
+      contract: null,
+      name: project.name || project.id || '—',
+      priceBnb: null,
+      costText,
+      supply: Number.isFinite(minted) ? minted : null,
+      supplyMax: Number.isFinite(supply) ? supply : null,
+      left: (Number.isFinite(minted) && Number.isFinite(supply)) ? Math.max(supply - minted, 0) : null,
+      soldOut: false,
+      mints: Number.isFinite(minted) ? minted : null,
+      risk: String(verdict.risk || 'unknown').toLowerCase(),
+      score: typeof verdict.score === 'number' ? verdict.score : null,
+      safety: null,
+      findings: null,
+      firstSeen: null,
+      lastMint: null,
+      sources: ['catalog'],
+      catalogId: project.id || null
+    });
+  }
+  items.sort((a, b) => (radarRiskRank(a.risk) - radarRiskRank(b.risk)) || ((b.score ?? 0) - (a.score ?? 0)) || String(b.firstSeen || '').localeCompare(String(a.firstSeen || '')));
+  return { generatedAt: data.generatedAt || null, items: items.slice(0, 15) };
+}
+
+async function fetchDattRadar() {
+  const html = await (await fetchWithTimeout(DATT_BASE)).text();
+  const items = [];
+  for (const match of html.matchAll(/<tr>([\s\S]*?)<\/tr>/g)) {
+    const row = match[1];
+    const link = row.match(/<a class="nama-koleksi" href="\/c\/(0x[a-fA-F0-9]{40})\/">([^<]+)<\/a>/);
+    if (!link) continue;
+    if (!/jenis-mint_percuma/.test(row)) continue;
+    const safetyClass = (row.match(/<span class="lencana lencana-([a-z]+)">/) || [])[1] || null;
+    const safety = (row.match(/<span class="lencana lencana-[a-z]+">([^<]*)<\/span>/) || [])[1] || null;
+    const findings = (row.match(/<span class="temuan">([^<]*)<\/span>/) || [])[1] || null;
+    const mints = (row.match(/<td class="nombor">(\d+)<\/td>/) || [])[1];
+    items.push({
+      contract: link[1].toLowerCase(),
+      name: link[2].trim(),
+      priceBnb: 0,
+      priceSamples: null,
+      supply: null,
+      supplyMax: null,
+      left: null,
+      soldOut: false,
+      mints: mints ? Number(mints) : null,
+      risk: safetyClass === 'hijau' ? 'low' : safetyClass === 'kuning' ? 'medium' : safetyClass === 'merah' ? 'high' : 'unknown',
+      safety,
+      findings,
+      firstSeen: null,
+      lastMint: null,
+      sources: ['datt']
+    });
+  }
+  return items;
+}
+
+async function buildFreemintRadar() {
+  const settled = await Promise.allSettled([fetchKoncetRadar(), fetchCatalogRadar(), fetchDattRadar()]);
+  const koncet = settled[0].status === 'fulfilled' ? settled[0].value : [];
+  const catalog = settled[1].status === 'fulfilled' ? settled[1].value : { generatedAt: null, items: [] };
+  const datt = settled[2].status === 'fulfilled' ? settled[2].value : [];
+  const sourceStatus = {
+    koncet: { ok: settled[0].status === 'fulfilled', count: koncet.length, error: settled[0].status === 'rejected' ? String(settled[0].reason?.message || settled[0].reason) : null },
+    catalog: { ok: settled[1].status === 'fulfilled', count: catalog.items.length, generatedAt: catalog.generatedAt, error: settled[1].status === 'rejected' ? String(settled[1].reason?.message || settled[1].reason) : null },
+    datt: { ok: settled[2].status === 'fulfilled', count: datt.length, error: settled[2].status === 'rejected' ? String(settled[2].reason?.message || settled[2].reason) : null }
+  };
+
+  const byKey = new Map();
+  const mergeItem = (item) => {
+    const key = item.contract || `name:${normRadarName(item.name)}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { ...item, sources: [...(item.sources || [])] });
+      return;
+    }
+    existing.sources = [...new Set([...existing.sources, ...(item.sources || [])])];
+    if (existing.priceBnb === null || existing.priceBnb === undefined) existing.priceBnb = item.priceBnb;
+    if (existing.costText === undefined || existing.costText === null) existing.costText = item.costText;
+    if (existing.left === null || existing.left === undefined) existing.left = item.left;
+    if (existing.supply === null || existing.supply === undefined) existing.supply = item.supply;
+    if (existing.supplyMax === null || existing.supplyMax === undefined) existing.supplyMax = item.supplyMax;
+    if (existing.mints === null || existing.mints === undefined) existing.mints = item.mints;
+    if (existing.safety === null || existing.safety === undefined) existing.safety = item.safety;
+    if (existing.findings === null || existing.findings === undefined) existing.findings = item.findings;
+    if (existing.score === null || existing.score === undefined) existing.score = item.score;
+    if (existing.catalogId === undefined) existing.catalogId = item.catalogId;
+    if (item.soldOut) existing.soldOut = true;
+    const risks = [existing.risk, item.risk].map((r) => String(r || 'unknown').toLowerCase());
+    existing.risk = risks.includes('high') ? 'high' : risks.includes('medium') ? 'medium' : risks.includes('low') ? 'low' : 'unknown';
+    if (item.firstSeen && (!existing.firstSeen || item.firstSeen < existing.firstSeen)) existing.firstSeen = item.firstSeen;
+    if (item.lastMint && (!existing.lastMint || item.lastMint > existing.lastMint)) existing.lastMint = item.lastMint;
+  };
+  for (const item of koncet) mergeItem(item);
+  for (const item of datt) mergeItem(item);
+  for (const item of catalog.items) mergeItem(item);
+
+  const now = Date.now();
+  const results = [...byKey.values()]
+    .map((item) => ({
+      ...item,
+      isNew: item.firstSeen ? (now - new Date(item.firstSeen).getTime() <= 6 * 60 * 60 * 1000) : false,
+      links: {
+        bscscan: item.contract ? `https://bscscan.com/token/${item.contract}` : null,
+        datt: item.contract ? `https://datt.my/c/${item.contract}/` : null
+      }
+    }))
+    .sort((a, b) => String(b.firstSeen || '').localeCompare(String(a.firstSeen || '')))
+    .slice(0, 75);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    catalogGeneratedAt: catalog.generatedAt,
+    total: results.length,
+    sources: sourceStatus,
+    results
+  };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -406,6 +627,20 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (parsedUrl.pathname === '/api/freemint/radar') {
+    if (req.method !== 'GET') {
+      sendJson(res, 405, { message: 'Method not allowed' });
+      return;
+    }
+    try {
+      const result = await buildFreemintRadar();
+      sendJson(res, 200, result);
+    } catch (error) {
+      sendJson(res, 500, { message: error.message || 'Freemint radar failed' });
+    }
+    return;
+  }
+
   if (parsedUrl.pathname === '/api/bnb/health') {
     sendJson(res, 200, {
       ok: true,
@@ -441,6 +676,11 @@ const server = http.createServer(async (req, res) => {
       if (parsedUrl.pathname === '/watchlist.html') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(fs.readFileSync(path.join(__dirname, 'watchlist.html')));
+        return;
+      }
+      if (parsedUrl.pathname === '/freemint.html') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(fs.readFileSync(path.join(__dirname, 'freemint.html')));
         return;
       }
       if (parsedUrl.pathname === '/agents.json') {
