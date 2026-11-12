@@ -565,4 +565,28 @@ async function init() {
   });
   $('#deleteSelectedButton').addEventListener('click', handleDeleteSelected);
   $('#closeDialogButton').addEventListener('click', () => $('#agentDialog').close());
-  $('#cancelDialogButton').addEve
+    $('#cancelDialogButton').addEventListener('click', () => $('#agentDialog').close());
+  $('#closeDetailDialogButton').addEventListener('click', () => $('#agentDetailDialog').close());
+  $('#detailCloseButton').addEventListener('click', () => $('#agentDetailDialog').close());
+  $('#agentDialog').addEventListener('click', (event) => {
+    if (event.target === $('#agentDialog')) $('#agentDialog').close();
+  });
+  $('#agentDetailDialog').addEventListener('click', (event) => {
+    if (event.target === $('#agentDetailDialog')) $('#agentDetailDialog').close();
+  });
+  $('#bnbLookupForm').addEventListener('submit', handleBnbLookup);
+  $('#bnbLookupResults').addEventListener('click', handleBnbAdd);
+  document.querySelectorAll('.nav a[data-menu]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      handleMenuAction(link.dataset.menu);
+    });
+  });
+  $('#closeAuditDialogButton').addEventListener('click', () => $('#auditDialog').close());
+  $('#auditCloseButton').addEventListener('click', () => $('#auditDialog').close());
+  $('#auditDialog').addEventListener('click', (event) => {
+    if (event.target === $('#auditDialog')) $('#auditDialog').close();
+  });
+}
+
+init();
