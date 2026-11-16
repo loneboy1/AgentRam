@@ -339,7 +339,7 @@ function radarRiskRank(risk) {
 async function fetchKoncetRadar() {
   const [feed, contracts] = await Promise.all([
     (await fetchWithTimeout(`${KONCET_BASE}/api/pulse/feed?limit=200`)).json(),
-    (await fetchWithTimeout(`${KONCET_BASE}/api/pulse/contracts?limit=100`)).json()
+    (await fetchWithTimeout(`${KONCET_BASE}/api/pulse/contracts?limit=200`)).json()
   ]);
   const byContract = new Map();
   for (const entry of Array.isArray(contracts) ? contracts : []) {
@@ -374,8 +374,11 @@ async function fetchKoncetRadar() {
       risk: 'unknown',
       safety: null,
       findings: null,
-      firstSeen: birthTs ? new Date(Number(birthTs) * 1000).toISOString()
-        : entry.ts ? new Date(Number(entry.ts) * 1000).toISOString() : null,
+      // Jangan fallback ke entry.ts: ts di feed koncet adalah timestamp batch
+      // indexer (nilainya sama untuk semua baris dalam satu fetch), bukan
+      // waktu kelahiran proyek. Fallback itu yang membuat banyak proyek
+      // tampil dengan firstSeen yang sama persis.
+      firstSeen: birthTs ? new Date(Number(birthTs) * 1000).toISOString() : null,
       lastMint: entry.ts ? new Date(Number(entry.ts) * 1000).toISOString() : null,
       sources: ['koncet']
     });
@@ -474,7 +477,6 @@ async function buildFreemintRadar() {
     catalog: { ok: settled[1].status === 'fulfilled', count: catalog.items.length, generatedAt: catalog.generatedAt, error: settled[1].status === 'rejected' ? String(settled[1].reason?.message || settled[1].reason) : null },
     datt: { ok: settled[2].status === 'fulfilled', count: datt.length, error: settled[2].status === 'rejected' ? String(settled[2].reason?.message || settled[2].reason) : null }
   };
-
   const byKey = new Map();
   const mergeItem = (item) => {
     const key = item.contract || `name:${normRadarName(item.name)}`;
@@ -488,6 +490,7 @@ async function buildFreemintRadar() {
     if (existing.costText === undefined || existing.costText === null) existing.costText = item.costText;
     if (existing.left === null || existing.left === undefined) existing.left = item.left;
     if (existing.supply === null || existing.supply === undefined) existing.supply = item.supply;
+    if (existing.supplyMax === null || existing.supplyMax === undefined) existing.su
     if (existing.supplyMax === null || existing.supplyMax === undefined) existing.supplyMax = item.supplyMax;
     if (existing.mints === null || existing.mints === undefined) existing.mints = item.mints;
     if (existing.safety === null || existing.safety === undefined) existing.safety = item.safety;
